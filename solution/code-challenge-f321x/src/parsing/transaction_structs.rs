@@ -38,18 +38,20 @@ pub struct TxIn {
     pub scriptsig: 		    Option<String>,
     #[serde_as(as = "NoneAsEmptyString")]
     pub scriptsig_asm:      Option<String>,
-	pub prevout:			Option<Script>,
+	pub prevout:			Script,
     pub witness: 			Option<Vec<String>>,
     pub is_coinbase:        bool,
-    pub sequence: 			u64,
+    pub sequence: 			u32,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Transaction {
-    pub version: i32,
-    pub locktime: u64,
-    pub vin: Vec<TxIn>,
-    pub vout: Vec<TxOut>,
+    pub json_path:      Option<String>,
+    pub txid:           Option<String>,
+    pub version:        u32,
+    pub locktime:       u32,
+    pub vin:            Vec<TxIn>,
+    pub vout:           Vec<TxOut>,
 }
 
 // {

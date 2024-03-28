@@ -1,20 +1,24 @@
 pub mod parsing;
+pub mod validation;
+
+use parsing::parse_transactions_from_dir;
+use validation::ValidationResult;
 
 fn main() {
-    let parsed_transactions = parsing::parse_transactions_from_dir("/workspaces/code-challenge-2024-f321x/mempool");
+    let parsed_transactions = parse_transactions_from_dir("/workspaces/code-challenge-2024-f321x/mempool");
 
-    let mut amount = 0;
+    let mut tx_count = 0;
     for tx in &parsed_transactions {
-      // for input in &tx.vin{
-      //   println!("Is coinbase: {} \n", input.is_coinbase);
-      //   if input.is_coinbase == true {
-      //     println!("{:?}\n\n", tx);
-      //   }
-      // }
-      println!("{:#?}\n\n", tx);
-      amount += 1;
+      match tx.validate() {
+        ValidationResult::Valid => (),
+        ValidationResult::Invalid(msg) => {
+          println!("Transaction {:#?} invalid. Reason {}\n", tx.json_path, msg);
+          std::process::exit(1);
+        }
+      }
+      tx_count += 1;
 	}
-  println!("\nNumber of transactions: {}\n", amount);
+  println!("\nDone. Number of parsed transactions: {}\n", tx_count);
 }
 
 // Todo:

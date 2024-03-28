@@ -25,12 +25,17 @@ fn parse_file_content(file_to_load: fs::DirEntry) -> Option<Transaction> {
 	let file_content = fs::read_to_string(file_path_buf.as_path()).expect("Reading file content failed");
 
 	match parse_json(&file_content) {
-		Some(tx) => Some(tx),
+		Some(mut tx) => {
+			tx.json_path = Some(file_path_buf.as_path()
+										.to_str()
+										.expect("Path to string conversion failed!")
+										.to_string());
+			Some(tx)
+		},
 		None => {
 			panic!("Invalid Json content in file: {:?}, Delete or correct this file!\n", file_path_buf);
 		}
 	}
-
 }
 
 pub fn parse_transactions_from_dir(directory_path: &str) -> Vec<Transaction> {
