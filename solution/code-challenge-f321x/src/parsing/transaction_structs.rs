@@ -1,48 +1,48 @@
 // Definition of data structures to hold a bitcoin transaction
 
 use serde::Deserialize;
+use serde_with::{serde_as, NoneAsEmptyString};
 
+#[serde_as]
 #[derive(Deserialize, Debug)]
 pub struct TxOut {
-    pub	scriptpubkey:			String,
-	pub	scriptpubkey_asm:		String,
-	pub	scriptpubkey_type:		String,
+    #[serde_as(as = "NoneAsEmptyString")]
+    pub	scriptpubkey:			Option<String>,
+    #[serde_as(as = "NoneAsEmptyString")]
+	pub	scriptpubkey_asm:		Option<String>,
+    #[serde_as(as = "NoneAsEmptyString")]
+	pub	scriptpubkey_type:		Option<String>,
 	pub	scriptpubkey_address: 	Option<String>,
 	pub	value:					u64,
 }
 
-// #[derive(Deserialize, Debug)]
-// pub struct OutPoint {
-//     pub txid: String,
-//     pub vout: u32,
-// }
-
+#[serde_as]
 #[derive(Deserialize, Debug)]
 pub struct Script {
-	pub	scriptpubkey:			String,
-	pub	scriptpubkey_asm:		String,
-	pub	scriptpubkey_type:		String,
+    #[serde_as(as = "NoneAsEmptyString")]
+	pub	scriptpubkey:			Option<String>,
+    #[serde_as(as = "NoneAsEmptyString")]
+	pub	scriptpubkey_asm:		Option<String>,
+    #[serde_as(as = "NoneAsEmptyString")]
+	pub	scriptpubkey_type:		Option<String>,
 	pub	scriptpubkey_address: 	Option<String>,
 	pub	value:					u64,
 }
 
+#[serde_as]
 #[derive(Deserialize, Debug)]
 pub struct TxIn {
     pub txid:               String,
     pub vout: 	            u32,
+    #[serde_as(as = "NoneAsEmptyString")]
     pub scriptsig: 		    Option<String>,
+    #[serde_as(as = "NoneAsEmptyString")]
     pub scriptsig_asm:      Option<String>,
 	pub prevout:			Option<Script>,
     pub witness: 			Option<Vec<String>>,
     pub is_coinbase:        bool,
     pub sequence: 			u64,
 }
-
-// #[derive(Deserialize, Debug)]
-// pub enum LockTime {
-//     Blocks(u32),
-//     Seconds(u64),
-// }
 
 #[derive(Deserialize, Debug)]
 pub struct Transaction {
