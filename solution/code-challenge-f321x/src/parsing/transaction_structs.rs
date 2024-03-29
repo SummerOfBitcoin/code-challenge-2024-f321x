@@ -48,7 +48,7 @@ pub struct TxIn {
 pub struct Transaction {
     pub json_path:      Option<String>,
     pub txid:           Option<String>,
-    pub version:        u32,
+    pub version:        i32,
     pub locktime:       u32,
     pub vin:            Vec<TxIn>,
     pub vout:           Vec<TxOut>,

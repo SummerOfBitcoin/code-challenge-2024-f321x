@@ -1,4 +1,4 @@
-use crate::parsing::transaction_structs::{Transaction, TxIn};
+use crate::parsing::transaction_structs::{Transaction, TxIn, TxOut};
 use sha2::{Sha256, Digest};
 
 fn hash(preimage: &[u8]) -> String {
@@ -52,24 +52,53 @@ fn serialize_input(input: &TxIn) -> Vec<u8> {
 	serialized_input
 }
 
-fn	assemble_txid_preimage(tx: &Transaction) -> Vec<u8> {
-	let preimage: Vec<u8> = Vec::new();
-	let version = tx.version.to_le_bytes();
-	let	len_inputs = varint(tx.vin.len() as u128);
+fn	serialize_output(output: &TxOut) -> Vec<u8> {
+	let mut serialized_output: Vec<u8> = Vec::new();
+	let value = output.value.to_le_bytes();  // maybe signed i64?
+	let pubkey_script_len = match &output.scriptpubkey {
+		Some(s) => s.len(),
+		None => 0,
+	};
+	let pubkey_script_len = varint(pubkey_script_len as u128);
+	let pubkey_script_bytes = match &output.scriptpubkey {
+		Some(s) => s.as_bytes(),
+		None => &[],
+	};
+	serialized_output.extend_from_slice(&value);
+	serialized_output.extend(pubkey_script_len);
+	serialized_output.extend(pubkey_script_bytes);
+	serialized_output
+}
 
+fn	assemble_txid_preimage(tx: &Transaction) -> Vec<u8> {
+	let mut preimage: Vec<u8> = Vec::new();
+	let version = tx.version.to_le_bytes();
+	
+	let	len_inputs = varint(tx.vin.len() as u128);
 	let mut all_input_bytes: Vec<u8> = Vec::new();
 	for tx_in in &tx.vin {
 		all_input_bytes.append(&mut serialize_input(tx_in));
 	}
+
 	let len_outputs = varint(tx.vout.len() as u128);
-	
+	let mut all_output_bytes: Vec<u8> = Vec::new();
+	for tx_out in &tx.vout {
+		all_output_bytes.append(&mut serialize_output(tx_out));
+	}
 
 	let locktime = tx.locktime.to_le_bytes();
+	preimage.extend_from_slice(&version);
+	preimage.extend(len_inputs);
+	preimage.extend(all_input_bytes);
+	preimage.extend_from_slice(&len_outputs);
+	preimage.extend(all_output_bytes);
+	preimage.extend_from_slice(&locktime);
 	preimage
 }
 
 pub fn validate_txid_hash_filename(tx: &Transaction) -> bool {
-	true
+	let tx_preimage = assemble_txid_preimage(tx);
+	// now double hash
 }
 
 // # Given arrays of inputs and outputs (no witnesses!) compute the txid.
