@@ -8,7 +8,7 @@ fn hash(preimage: &[u8]) -> String {
 	result.iter().map(|byte| format!("{:02x}", byte)).collect()
 }
 
-fn varint(n: u64) -> Vec<u8> {
+fn varint(n: u128) -> Vec<u8> {
     if n <= 252 {
         vec![n as u8]
     } else if n <= 0xffff {
@@ -40,7 +40,7 @@ fn serialize_input(input: &TxIn) -> Vec<u8> {
 		Some(s) => s.len(),
 		None => 0,
 	};
-	let scriptsig_len = varint(scriptsig_len as u64);
+	let scriptsig_len = varint(scriptsig_len as u128);
 	let scriptsig_bytes = match &input.scriptsig {
 		Some(s) => s.as_bytes(),
 		None => &[],
@@ -55,13 +55,14 @@ fn serialize_input(input: &TxIn) -> Vec<u8> {
 fn	assemble_txid_preimage(tx: &Transaction) -> Vec<u8> {
 	let preimage: Vec<u8> = Vec::new();
 	let version = tx.version.to_le_bytes();
-	let	len_inputs = varint(tx.vin.len() as u64);
+	let	len_inputs = varint(tx.vin.len() as u128);
 
 	let mut all_input_bytes: Vec<u8> = Vec::new();
 	for tx_in in &tx.vin {
 		all_input_bytes.append(&mut serialize_input(tx_in));
 	}
-
+	let len_outputs = varint(tx.vout.len() as u128);
+	
 
 	let locktime = tx.locktime.to_le_bytes();
 	preimage
