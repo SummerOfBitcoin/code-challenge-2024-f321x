@@ -5,7 +5,7 @@ use parsing::parse_transactions_from_dir;
 use validation::ValidationResult;
 
 fn main() {
-    let parsed_transactions = parse_transactions_from_dir("/workspaces/code-challenge-2024-f321x/mempool");
+    let parsed_transactions = parse_transactions_from_dir("/home/benutzer/code/bitcoin/code-challenge-2024-f321x/testfiles");
 
     let mut tx_count = 0;
     for tx in &parsed_transactions {

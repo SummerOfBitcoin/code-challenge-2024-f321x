@@ -47,7 +47,6 @@ pub struct TxIn {
 #[derive(Deserialize, Debug)]
 pub struct Transaction {
     pub json_path:      Option<String>,
-    pub txid:           Option<String>,
     pub version:        i32,
     pub locktime:       u32,
     pub vin:            Vec<TxIn>,

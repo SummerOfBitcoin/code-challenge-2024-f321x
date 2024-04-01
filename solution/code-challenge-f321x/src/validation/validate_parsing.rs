@@ -1,11 +1,17 @@
 use crate::parsing::transaction_structs::{Transaction, TxIn, TxOut};
 use sha2::{Sha256, Digest};
+use std::path::Path;
 
-fn hash(preimage: &[u8]) -> String {
-	let mut hasher = Sha256::new();
-	hasher.update(preimage);
-	let result = hasher.finalize();
-	result.iter().map(|byte| format!("{:02x}", byte)).collect()
+fn triple_hash(preimage: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    let mut result = preimage.to_vec();
+
+    for _ in 0..3 {
+        hasher.update(&result);
+        result = hasher.finalize_reset().to_vec();
+    }
+
+    result.iter().map(|byte| format!("{:02x}", byte)).collect()
 }
 
 fn varint(n: u128) -> Vec<u8> {
@@ -96,11 +102,32 @@ fn	assemble_txid_preimage(tx: &Transaction) -> Vec<u8> {
 	preimage
 }
 
+// todo: check reverse txid
+// https://live.blockcypher.com/btc/decodetx/
+
 pub fn validate_txid_hash_filename(tx: &Transaction) -> bool {
 	let tx_preimage = assemble_txid_preimage(tx);
-	// now double hash
+	let tx_preimage: String = tx_preimage.iter().map(|byte| format!("{:02x}", byte)).collect();
+	println!("Preimage: {} ", tx_preimage);
+	// let triple_hashed = triple_hash(&tx_preimage);
+
+    // if let Some(json_path) = tx.json_path.as_ref() {
+    //     let path = Path::new(json_path);
+    //     if let Some(filename) = path.file_stem() {
+    //         if let Some(filename_str) = filename.to_str() {
+	// 			println!("FN: {} | TH: {} \n", filename_str, triple_hashed);
+    //             if filename_str == triple_hashed {
+    //                 println!("The filename matches the triple hash.");
+	// 				std::process::exit(0);
+    //             }
+    //         }
+    //     }
+    // }
+	// println!("{}", txid);
+	true
 }
 
+// my old python code:
 // # Given arrays of inputs and outputs (no witnesses!) compute the txid.
 // # Return the 32 byte txid as a *reversed* hex-encoded string.
 // # https://developer.bitcoin.org/reference/transactions.html#raw-transaction-format
