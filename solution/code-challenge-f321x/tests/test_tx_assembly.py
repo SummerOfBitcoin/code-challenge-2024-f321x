@@ -19,12 +19,14 @@ def input_from_utxo(txid: bytes, index: int, scriptsig: bytes, sequence: int) ->
     # Index of the output being spent (zero-indexed)
     index = index.to_bytes(4, "little")
     outpoint = reversed_txid + index
+    print("\nInput outpoint hex: " + outpoint.hex() + "\n")
     # ScriptSig (empty)
     scriptsig_len = len(scriptsig).to_bytes(1, "little")
+    print("\nScriptsig length: " + scriptsig_len.hex() + "\n")
     # Sequence (default)
     sequence = sequence.to_bytes(4, "little")
     # Return the full input
-    return outpoint, outpoint + scriptsig_len + scriptsig + sequence
+    return outpoint + scriptsig_len + scriptsig + sequence
 
 # Given an output script and value (in satoshis), return a serialized transaction output
 def output_from_options(script: bytes, value: int) -> bytes:
@@ -37,24 +39,30 @@ def output_from_options(script: bytes, value: int) -> bytes:
 # https://developer.bitcoin.org/reference/transactions.html#raw-transaction-format
 def get_txid(inputs: List[bytes], outputs: List[bytes]) -> str:
     version = (1).to_bytes(4, "little")
-    locktime = bytes.fromhex("00000000")
+    print("version: " + version.hex())
     tx = b""
     tx += version + len(inputs).to_bytes(1, "little")
+    print("Amount TxIN: " + len(inputs).to_bytes(1, "little").hex() + "\n")
     for input in inputs:
         tx += input
+        print("appended input bytes: " + input.hex() + "\n")
     tx += len(outputs).to_bytes(1, "little")
+    print("Amount TxOUT: " + len(outputs).to_bytes(1, "little").hex() + "\n")
     for output in outputs:
         tx += output
+        print("appended output bytes: " + output.hex() + "\n")
+    locktime = bytes.fromhex("00000000")
     tx += locktime
+    print("Locktime: " + locktime.hex() + "\n")
     print(tx.hex())
     return hashlib.new("sha256", hashlib.new("sha256", tx).digest()).digest()[::-1].hex()
 
 
 def spend_p2wpkh():
-    
-    _, serialized_input = input_from_utxo(bytes.fromhex("d1283ec7f6a2bcb65a5905033168258ca282e806c9dc7164415519a5ef041b14"), 
-                                          0, 
-                                          bytes.fromhex("4730440220200b9a61529151f9f264a04e9aa17bb6e1d53fb345747c44885b1e185a82c17502200e41059f8ab4d3b3709dcb91b050c344b06c5086f05598d62bc06a8b746db4290121025f0ba0cdc8aa97ec1fffd01fac34d3a7f700baf07658048263a2c925825e8d33"), 
+
+    serialized_input = input_from_utxo(bytes.fromhex("d1283ec7f6a2bcb65a5905033168258ca282e806c9dc7164415519a5ef041b14"),
+                                          0,
+                                          bytes.fromhex("4730440220200b9a61529151f9f264a04e9aa17bb6e1d53fb345747c44885b1e185a82c17502200e41059f8ab4d3b3709dcb91b050c344b06c5086f05598d62bc06a8b746db4290121025f0ba0cdc8aa97ec1fffd01fac34d3a7f700baf07658048263a2c925825e8d33"),
                                           4294967295)
 
 
@@ -63,8 +71,9 @@ def spend_p2wpkh():
 
     # Reserialize without witness data and double-SHA256 to get the txid
     txid = get_txid([serialized_input], [output])
-    # return hashlib.new("sha256", bytes.fromhex(txid)).digest().hex()
-   
+    print(txid)
+    return hashlib.new("sha256", bytes.fromhex(txid)).digest().hex()
+
 print(spend_p2wpkh())
 
 

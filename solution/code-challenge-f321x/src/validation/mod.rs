@@ -1,9 +1,13 @@
 mod validate_values;
 mod validate_parsing;
+pub mod utils;
+mod signature_verification;
 
 use crate::parsing::transaction_structs::Transaction;
 use self::validate_values::validate_values;
 use self::validate_parsing::validate_txid_hash_filename;
+use self::utils::TransactionType;
+use self::signature_verification::verify_p2wpkh;
 
 pub enum ValidationResult {
     Valid,
@@ -20,9 +24,33 @@ fn sanity_checks(tx: &Transaction) -> ValidationResult {
 	ValidationResult::Valid
 }
 
+fn signature_verification(tx: &Transaction) -> ValidationResult {
+	for txin in &tx.vin {
+		let tx_type = TransactionType::fetch(txin);
+		let result = match tx_type {
+			TransactionType::P2WPKH => verify_p2wpkh(tx, txin),
+			_ => panic!("Weird type: {:#?}", tx_type),
+		};
+		match result {
+			ValidationResult::Valid => (),
+			ValidationResult::Invalid(msg) => {
+				return ValidationResult::Invalid(msg);
+			}
+		}
+	}
+
+	ValidationResult::Valid
+}
+
 impl Transaction {
 	pub fn validate(&self) -> ValidationResult {
 		match sanity_checks(self) {
+			ValidationResult::Valid => (),
+			ValidationResult::Invalid(msg) => {
+				return ValidationResult::Invalid(msg);
+			}
+		}
+		match signature_verification(self) {
 			ValidationResult::Valid => (),
 			ValidationResult::Invalid(msg) => {
 				return ValidationResult::Invalid(msg);

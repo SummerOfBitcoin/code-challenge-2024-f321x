@@ -2,16 +2,16 @@
 
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
+use crate::validation::utils::get_outpoint;
 
 #[serde_as]
 #[derive(Deserialize, Debug)]
 pub struct TxOut {
     #[serde_as(as = "NoneAsEmptyString")]
     pub	scriptpubkey:			Option<String>,
+	pub	scriptpubkey_asm:		String,
+	pub	scriptpubkey_type:		String,
     #[serde_as(as = "NoneAsEmptyString")]
-	pub	scriptpubkey_asm:		Option<String>,
-    #[serde_as(as = "NoneAsEmptyString")]
-	pub	scriptpubkey_type:		Option<String>,
 	pub	scriptpubkey_address: 	Option<String>,
 	pub	value:					u64,
 }
@@ -19,12 +19,10 @@ pub struct TxOut {
 #[serde_as]
 #[derive(Deserialize, Debug)]
 pub struct Script {
+	pub	scriptpubkey:			String,
+	pub	scriptpubkey_asm:		String,
+	pub	scriptpubkey_type:		String,
     #[serde_as(as = "NoneAsEmptyString")]
-	pub	scriptpubkey:			Option<String>,
-    #[serde_as(as = "NoneAsEmptyString")]
-	pub	scriptpubkey_asm:		Option<String>,
-    #[serde_as(as = "NoneAsEmptyString")]
-	pub	scriptpubkey_type:		Option<String>,
 	pub	scriptpubkey_address: 	Option<String>,
 	pub	value:					u64,
 }
@@ -53,38 +51,66 @@ pub struct Transaction {
     pub vout:           Vec<TxOut>,
 }
 
+impl Transaction {
+    pub fn serialize_all_sequences(&self) -> Vec<u8>{
+        let mut all_sequences = Vec::new();
+        for input in &self.vin {
+            all_sequences.extend(input.sequence.to_le_bytes());
+        }
+        all_sequences
+    }
+
+    pub fn serialize_all_outpoints(&self) -> Vec<u8> {
+        let mut all_outpoints = Vec::new();
+        for input in &self.vin {
+            all_outpoints.extend(get_outpoint(input));
+        }
+        all_outpoints
+    }
+
+    pub fn serialize_all_outputs(&self) -> Vec<u8> {
+        let mut all_outputs = Vec::new();
+        for output in &self.vout {
+            all_outputs.extend(&output.value.to_le_bytes());
+            if let Some(scriptpubkey) = &output.scriptpubkey {
+                all_outputs.extend(hex::decode(scriptpubkey).unwrap());
+            }
+        }
+        all_outputs
+    }
+}
+
 // {
-// 	"version": 2,
-// 	"locktime": 0,
-// 	"vin": [
-// 	  {
-// 		"txid": "cda2a6929112c05a5164c6a6029ae71529b022f3c1aee6a76fc00736de570f4a",
-// 		"vout": 10,
-// 		"prevout": {
-// 		  "scriptpubkey": "51201e2d7e631e85167d2f538b89ed2a0e83b2bf209b1a3fe7011c58757a914be6b5",
-// 		  "scriptpubkey_asm": "OP_PUSHNUM_1 OP_PUSHBYTES_32 1e2d7e631e85167d2f538b89ed2a0e83b2bf209b1a3fe7011c58757a914be6b5",
-// 		  "scriptpubkey_type": "v1_p2tr",
-// 		  "scriptpubkey_address": "bc1prckhucc7s5t86t6n3wy762swswet7gymrgl7wqgutp6h4y2tu66s4x3q4c",
-// 		  "value": 1711
-// 		},
-// 		"scriptsig": "",
-// 		"scriptsig_asm": "",
-// 		"witness": [
-// 		  "02",
-// 		  "750063036f726401010a746578742f706c61696e00367b2270223a226272632d3230222c226f70223a226d696e74222c227469636b223a2261616161222c22616d74223a223130303030227d6851",
-// 		  "c1df3132ce091562b5150e601a4643bf625562d04dfdf3e4ede068c09e44ac01ab"
-// 		],
-// 		"is_coinbase": false,
-// 		"sequence": 4294967295
-// 	  }
-// 	],
-// 	"vout": [
-// 	  {
-// 		"scriptpubkey": "0014a40897ac0756778584e7dbe457cca54abc6daf4c",
-// 		"scriptpubkey_asm": "OP_0 OP_PUSHBYTES_20 a40897ac0756778584e7dbe457cca54abc6daf4c",
-// 		"scriptpubkey_type": "v0_p2wpkh",
-// 		"scriptpubkey_address": "bc1q5syf0tq82emctp88m0j90n99f27xmt6v2f79lx",
-// 		"value": 294
-// 	  }
-// 	]
-//   }
+//     "version": 1,
+//     "locktime": 0,
+//     "vin": [
+//       {
+//         "txid": "9cea74f2834c80e3e9a4cd13cfaed3cf4b9e39fc5e1d222784dda6aeb9fa35e4",
+//         "vout": 5,
+//         "prevout": {
+//           "scriptpubkey": "00148d80fecc4c36bdc5ef58ea5dae8fd7989964ef79",
+//           "scriptpubkey_asm": "OP_0 OP_PUSHBYTES_20 8d80fecc4c36bdc5ef58ea5dae8fd7989964ef79",
+//           "scriptpubkey_type": "v0_p2wpkh",
+//           "scriptpubkey_address": "bc1q3kq0anzvx67utm6cafw6ar7hnzvkfmmeqrnunx",
+//           "value": 27393
+//         },
+//         "scriptsig": "",
+//         "scriptsig_asm": "",
+//         "witness": [
+//           "30440220531de46c024a8e40dbb7d3f8e18cab9091e5e90e2b461e293b9431e5426ac4c202204be3291f88f51b40697be26241860aecbdc8354f01b37acb93422a8eca08aee701",
+//           "0390df0d1b67b1dc5613e1e8ebc5cefddd534e8e2f0fc73ed988c1bb6f929a3cd4"
+//         ],
+//         "is_coinbase": false,
+//         "sequence": 4294967295
+//       }
+//     ],
+//     "vout": [
+//       {
+//         "scriptpubkey": "0014db71541760c7eb2deffd2b438706970eea489387",
+//         "scriptpubkey_asm": "OP_0 OP_PUSHBYTES_20 db71541760c7eb2deffd2b438706970eea489387",
+//         "scriptpubkey_type": "v0_p2wpkh",
+//         "scriptpubkey_address": "bc1qmdc4g9mqcl4jmmla9dpcwp5hpm4y3yu8vmyfvh",
+//         "value": 24546
+//       }
+//     ]
+// }

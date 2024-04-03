@@ -5,15 +5,14 @@ use parsing::parse_transactions_from_dir;
 use validation::ValidationResult;
 
 fn main() {
-    let parsed_transactions = parse_transactions_from_dir("/home/benutzer/code/bitcoin/code-challenge-2024-f321x/testfiles");
+    let parsed_transactions = parse_transactions_from_dir("/workspaces/code-challenge-2024-f321x/testfiles");
 
     let mut tx_count = 0;
     for tx in &parsed_transactions {
       match tx.validate() {
         ValidationResult::Valid => (),
         ValidationResult::Invalid(msg) => {
-          println!("Transaction {:#?} invalid. Reason {}\n", tx.json_path, msg);
-          std::process::exit(1);
+          panic!("Transaction {:#?} invalid. Reason {}\n", tx.json_path, msg);
         }
       }
       tx_count += 1;
@@ -24,7 +23,7 @@ fn main() {
 // Todo:
 // Validation: absolute timelocks 1 (unix time), verify sigs
 //  Just verify the script and signature.
-// Hint: You have to serialise the transaction and then create a commitment hash.
+// Hint: You have to serialize the transaction and then create a commitment hash.
 
 // asm to script pub conversion then checking address == (base58(pubkey) | bech32(pubkey))
 // remove dust txs and double spending
