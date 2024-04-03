@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
-use crate::validation::utils::get_outpoint;
+use crate::validation::utils::{get_outpoint, varint};
 
 #[serde_as]
 #[derive(Deserialize, Debug)]
@@ -73,44 +73,54 @@ impl Transaction {
         for output in &self.vout {
             all_outputs.extend(&output.value.to_le_bytes());
             if let Some(scriptpubkey) = &output.scriptpubkey {
+                all_outputs.extend(varint(hex::decode(scriptpubkey).unwrap().len() as u128));
                 all_outputs.extend(hex::decode(scriptpubkey).unwrap());
+            } else {
+                panic!("No scriptpubkey in output!");
             }
         }
         all_outputs
     }
 }
 
-// {
-//     "version": 1,
-//     "locktime": 0,
-//     "vin": [
-//       {
-//         "txid": "9cea74f2834c80e3e9a4cd13cfaed3cf4b9e39fc5e1d222784dda6aeb9fa35e4",
-//         "vout": 5,
-//         "prevout": {
-//           "scriptpubkey": "00148d80fecc4c36bdc5ef58ea5dae8fd7989964ef79",
-//           "scriptpubkey_asm": "OP_0 OP_PUSHBYTES_20 8d80fecc4c36bdc5ef58ea5dae8fd7989964ef79",
-//           "scriptpubkey_type": "v0_p2wpkh",
-//           "scriptpubkey_address": "bc1q3kq0anzvx67utm6cafw6ar7hnzvkfmmeqrnunx",
-//           "value": 27393
-//         },
-//         "scriptsig": "",
-//         "scriptsig_asm": "",
-//         "witness": [
-//           "30440220531de46c024a8e40dbb7d3f8e18cab9091e5e90e2b461e293b9431e5426ac4c202204be3291f88f51b40697be26241860aecbdc8354f01b37acb93422a8eca08aee701",
-//           "0390df0d1b67b1dc5613e1e8ebc5cefddd534e8e2f0fc73ed988c1bb6f929a3cd4"
-//         ],
-//         "is_coinbase": false,
-//         "sequence": 4294967295
-//       }
-//     ],
-//     "vout": [
-//       {
-//         "scriptpubkey": "0014db71541760c7eb2deffd2b438706970eea489387",
-//         "scriptpubkey_asm": "OP_0 OP_PUSHBYTES_20 db71541760c7eb2deffd2b438706970eea489387",
-//         "scriptpubkey_type": "v0_p2wpkh",
-//         "scriptpubkey_address": "bc1qmdc4g9mqcl4jmmla9dpcwp5hpm4y3yu8vmyfvh",
-//         "value": 24546
-//       }
-//     ]
-// }
+// # {
+//     #   "version": 1,
+//     #   "vin": [
+//     #   "locktime": 0,
+//     #     {
+//     #       "txid": "3b7dc918e5671037effad7848727da3d3bf302b05f5ded9bec89449460473bbb",
+//     #       "vout": 16,
+//     #       "prevout": {
+//     #         "scriptpubkey": "0014f8d9f2203c6f0773983392a487d45c0c818f9573",
+//     #         "scriptpubkey_asm": "OP_0 OP_PUSHBYTES_20 f8d9f2203c6f0773983392a487d45c0c818f9573",
+//     #         "scriptpubkey_type": "v0_p2wpkh",
+//     #         "scriptpubkey_address": "bc1qlrvlygpudurh8xpnj2jg04zupjqcl9tnk5np40",
+//     #         "value": 37079526
+//     #       },
+//     #       "scriptsig": "",
+//     #       "scriptsig_asm": "",
+//     #       "witness": [
+//     #         "30440220780ad409b4d13eb1882aaf2e7a53a206734aa302279d6859e254a7f0a7633556022011fd0cbdf5d4374513ef60f850b7059c6a093ab9e46beb002505b7cba0623cf301",
+//     #         "022bf8c45da789f695d59f93983c813ec205203056e19ec5d3fbefa809af67e2ec"
+//     #       ],
+//     #       "is_coinbase": false,
+//     #       "sequence": 4294967295
+//     #     }
+//     #   ],
+//     #   "vout": [
+//     #     {
+//     #       "scriptpubkey": "76a9146085312a9c500ff9cc35b571b0a1e5efb7fb9f1688ac",
+//     #       "scriptpubkey_asm": "OP_DUP OP_HASH160 OP_PUSHBYTES_20 6085312a9c500ff9cc35b571b0a1e5efb7fb9f16 OP_EQUALVERIFY OP_CHECKSIG",
+//     #       "scriptpubkey_type": "p2pkh",
+//     #       "scriptpubkey_address": "19oMRmCWMYuhnP5W61ABrjjxHc6RphZh11",
+//     #       "value": 100000
+//     #     },
+//     #     {
+//     #       "scriptpubkey": "0014ad4cc1cc859c57477bf90d0f944360d90a3998bf",
+//     #       "scriptpubkey_asm": "OP_0 OP_PUSHBYTES_20 ad4cc1cc859c57477bf90d0f944360d90a3998bf",
+//     #       "scriptpubkey_type": "v0_p2wpkh",
+//     #       "scriptpubkey_address": "bc1q44xvrny9n3t5w7lep58egsmqmy9rnx9lt6u0tc",
+//     #       "value": 36977942
+//     #     }
+//     #   ]
+//     # }

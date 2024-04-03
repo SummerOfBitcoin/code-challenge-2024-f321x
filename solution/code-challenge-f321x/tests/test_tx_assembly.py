@@ -1,112 +1,113 @@
 import hashlib
 from typing import List
 
-# Given an output script as a byte array, compute the p2wsh witness program
-# This is a segwit version 0 pay-to-script-hash witness program.
-# https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki#p2wsh
-def get_p2wsh_program(script: bytes, version: int=0) -> bytes:
-    version_byte = version.to_bytes(1, "little")
-    # Compute the SHA256 hash of the script
-    hash256  = hashlib.new("sha256", script).digest()
-    # Prepend the version byte and return
-    return version_byte + hash256
-
-# Given an outpoint, return a serialized transaction input spending it
-# Use hard-coded defaults for sequence and scriptSig
-def input_from_utxo(txid: bytes, index: int, scriptsig: bytes, sequence: int) -> bytes:
-    # Reverse the txid hash so it's little-endian
+def input_from_utxo(txid: bytes, index: int) -> bytes:
     reversed_txid = txid[::-1]
-    # Index of the output being spent (zero-indexed)
     index = index.to_bytes(4, "little")
-    outpoint = reversed_txid + index
-    print("\nInput outpoint hex: " + outpoint.hex() + "\n")
-    # ScriptSig (empty)
-    scriptsig_len = len(scriptsig).to_bytes(1, "little")
-    print("\nScriptsig length: " + scriptsig_len.hex() + "\n")
-    # Sequence (default)
-    sequence = sequence.to_bytes(4, "little")
-    # Return the full input
-    return outpoint + scriptsig_len + scriptsig + sequence
+    return reversed_txid + index
+
+def get_p2wpkh_scriptcode(asm) -> bytes:
+    tokens = asm.split(" ")
+    pubkey_hash = bytes.fromhex(tokens[-1])
+    scriptcode = bytes.fromhex("1976a914") + pubkey_hash + bytes.fromhex("88ac")
+    return scriptcode
+
+def get_commitment_hash(outpoint: bytes, scriptcode: bytes, value: int, outputs: List[bytes]) -> bytes:
+    def dsha256(data: bytes) -> bytes:
+        return hashlib.new("sha256", hashlib.new("sha256", data).digest()).digest()
+    result = b""
+    result += (1).to_bytes(4, "little")
+    # print("Version " + (1).to_bytes(4, "little").hex())
+
+    result += dsha256(outpoint)  # hashPrevouts
+    # print("dsha outpoint: " + dsha256(outpoint).hex())
+    result += dsha256(bytes.fromhex("ffffffff"))
+    # print("Sequences: " + dsha256(bytes.fromhex("ffffffff")).hex())
+    result += outpoint
+    # print("Outpoint: " + outpoint.hex())
+
+    result += scriptcode
+    # print("Scriptcode: " + scriptcode.hex())
+
+    result += value.to_bytes(8, "little")
+    # print("prevout value: " + value.to_bytes(8, "little").hex())
+
+    result += bytes.fromhex("ffffffff")
+    # print("sequence: " + )
+
+    result += dsha256(b"".join(outputs))
+    print("output0: " + outputs[0].hex())
+    print("output1: " + outputs[1].hex())
+    print("all outputs: " + b"".join(outputs).hex())
+    # print("all outputs: " + dsha256(b"".join(outputs)).hex())
+
+    result += bytes.fromhex("00000000")
+    result += bytes.fromhex("01000000")
+    return dsha256(result)
 
 # Given an output script and value (in satoshis), return a serialized transaction output
 def output_from_options(script: bytes, value: int) -> bytes:
     value = value.to_bytes(8, "little")
     script_length = len(script).to_bytes(1, "little")
+    print("Script length: " + script_length.hex())
     return value + script_length + script
 
-# Given arrays of inputs and outputs (no witnesses!) compute the txid.
-# Return the 32 byte txid as a *reversed* hex-encoded string.
-# https://developer.bitcoin.org/reference/transactions.html#raw-transaction-format
-def get_txid(inputs: List[bytes], outputs: List[bytes]) -> str:
-    version = (1).to_bytes(4, "little")
-    print("version: " + version.hex())
-    tx = b""
-    tx += version + len(inputs).to_bytes(1, "little")
-    print("Amount TxIN: " + len(inputs).to_bytes(1, "little").hex() + "\n")
-    for input in inputs:
-        tx += input
-        print("appended input bytes: " + input.hex() + "\n")
-    tx += len(outputs).to_bytes(1, "little")
-    print("Amount TxOUT: " + len(outputs).to_bytes(1, "little").hex() + "\n")
-    for output in outputs:
-        tx += output
-        print("appended output bytes: " + output.hex() + "\n")
-    locktime = bytes.fromhex("00000000")
-    tx += locktime
-    print("Locktime: " + locktime.hex() + "\n")
-    print(tx.hex())
-    return hashlib.new("sha256", hashlib.new("sha256", tx).digest()).digest()[::-1].hex()
-
-
 def spend_p2wpkh():
+    outpoint = input_from_utxo(bytes.fromhex("3b7dc918e5671037effad7848727da3d3bf302b05f5ded9bec89449460473bbb"), 16)
+    scriptcode = get_p2wpkh_scriptcode("OP_0 OP_PUSHBYTES_20 f8d9f2203c6f0773983392a487d45c0c818f9573")
 
-    serialized_input = input_from_utxo(bytes.fromhex("d1283ec7f6a2bcb65a5905033168258ca282e806c9dc7164415519a5ef041b14"),
-                                          0,
-                                          bytes.fromhex("4730440220200b9a61529151f9f264a04e9aa17bb6e1d53fb345747c44885b1e185a82c17502200e41059f8ab4d3b3709dcb91b050c344b06c5086f05598d62bc06a8b746db4290121025f0ba0cdc8aa97ec1fffd01fac34d3a7f700baf07658048263a2c925825e8d33"),
-                                          4294967295)
+    # serialized_input = input_from_utxo(bytes.fromhex("d1283ec7f6a2bcb65a5905033168258ca282e806c9dc7164415519a5ef041b14"),
+                                        #   0,
+                                        #   bytes.fromhex("4730440220200b9a61529151f9f264a04e9aa17bb6e1d53fb345747c44885b1e185a82c17502200e41059f8ab4d3b3709dcb91b050c344b06c5086f05598d62bc06a8b746db4290121025f0ba0cdc8aa97ec1fffd01fac34d3a7f700baf07658048263a2c925825e8d33"),
+                                        #   4294967295)
 
+    output1 = output_from_options(bytes.fromhex("76a9146085312a9c500ff9cc35b571b0a1e5efb7fb9f1688ac"), 100000)
+    output2 = output_from_options(bytes.fromhex("0014ad4cc1cc859c57477bf90d0f944360d90a3998bf"), 36977942)
 
+    message = get_commitment_hash(outpoint, scriptcode, 37079526, [output1, output2])
+    print("Serialized commitment: " + message.hex())
 
-    output = output_from_options(bytes.fromhex("76a914e5977cf916acdba010b9d847b9682135aa3ea81a88ac"), 1100665)
-
-    # Reserialize without witness data and double-SHA256 to get the txid
-    txid = get_txid([serialized_input], [output])
-    print(txid)
-    return hashlib.new("sha256", bytes.fromhex(txid)).digest().hex()
 
 print(spend_p2wpkh())
-
 
 # {
 #   "version": 1,
 #   "locktime": 0,
 #   "vin": [
 #     {
-#       "txid": "d1283ec7f6a2bcb65a5905033168258ca282e806c9dc7164415519a5ef041b14",
-#       "vout": 0,
+#       "txid": "3b7dc918e5671037effad7848727da3d3bf302b05f5ded9bec89449460473bbb",
+#       "vout": 16,
 #       "prevout": {
-#         "scriptpubkey": "76a91496bc8310635539000a65a7cc95cb773c0cc7009788ac",
-#         "scriptpubkey_asm": "OP_DUP OP_HASH160 OP_PUSHBYTES_20 96bc8310635539000a65a7cc95cb773c0cc70097 OP_EQUALVERIFY OP_CHECKSIG",
-#         "scriptpubkey_type": "p2pkh",
-#         "scriptpubkey_address": "1Ek2BpKHUbr6SrrWq4P3Tf2jB6UCST2bwx",
-#         "value": 1103367
+#         "scriptpubkey": "0014f8d9f2203c6f0773983392a487d45c0c818f9573",
+#         "scriptpubkey_asm": "OP_0 OP_PUSHBYTES_20 f8d9f2203c6f0773983392a487d45c0c818f9573",
+#         "scriptpubkey_type": "v0_p2wpkh",
+#         "scriptpubkey_address": "bc1qlrvlygpudurh8xpnj2jg04zupjqcl9tnk5np40",
+#         "value": 37079526
 #       },
-#       "scriptsig": "4730440220200b9a61529151f9f264a04e9aa17bb6e1d53fb345747c44885b1e185a82c17502200e41059f8ab4d3b3709dcb91b050c344b06c5086f05598d62bc06a8b746db4290121025f0ba0cdc8aa97ec1fffd01fac34d3a7f700baf07658048263a2c925825e8d33",
-#       "scriptsig_asm": "OP_PUSHBYTES_71 30440220200b9a61529151f9f264a04e9aa17bb6e1d53fb345747c44885b1e185a82c17502200e41059f8ab4d3b3709dcb91b050c344b06c5086f05598d62bc06a8b746db42901 OP_PUSHBYTES_33 025f0ba0cdc8aa97ec1fffd01fac34d3a7f700baf07658048263a2c925825e8d33",
+#       "scriptsig": "",
+#       "scriptsig_asm": "",
+#       "witness": [
+#         "30440220780ad409b4d13eb1882aaf2e7a53a206734aa302279d6859e254a7f0a7633556022011fd0cbdf5d4374513ef60f850b7059c6a093ab9e46beb002505b7cba0623cf301",
+#         "022bf8c45da789f695d59f93983c813ec205203056e19ec5d3fbefa809af67e2ec"
+#       ],
 #       "is_coinbase": false,
 #       "sequence": 4294967295
 #     }
 #   ],
 #   "vout": [
 #     {
-#       "scriptpubkey": "76a914e5977cf916acdba010b9d847b9682135aa3ea81a88ac",
-#       "scriptpubkey_asm": "OP_DUP OP_HASH160 OP_PUSHBYTES_20 e5977cf916acdba010b9d847b9682135aa3ea81a OP_EQUALVERIFY OP_CHECKSIG",
+#       "scriptpubkey": "76a9146085312a9c500ff9cc35b571b0a1e5efb7fb9f1688ac",
+#       "scriptpubkey_asm": "OP_DUP OP_HASH160 OP_PUSHBYTES_20 6085312a9c500ff9cc35b571b0a1e5efb7fb9f16 OP_EQUALVERIFY OP_CHECKSIG",
 #       "scriptpubkey_type": "p2pkh",
-#       "scriptpubkey_address": "1MvyDWhroVV7BAL1twmwvY88DdvBEmPbG7",
-#       "value": 1100665
+#       "scriptpubkey_address": "19oMRmCWMYuhnP5W61ABrjjxHc6RphZh11",
+#       "value": 100000
+#     },
+#     {
+#       "scriptpubkey": "0014ad4cc1cc859c57477bf90d0f944360d90a3998bf",
+#       "scriptpubkey_asm": "OP_0 OP_PUSHBYTES_20 ad4cc1cc859c57477bf90d0f944360d90a3998bf",
+#       "scriptpubkey_type": "v0_p2wpkh",
+#       "scriptpubkey_address": "bc1q44xvrny9n3t5w7lep58egsmqmy9rnx9lt6u0tc",
+#       "value": 36977942
 #     }
 #   ]
 # }
-
-# Rust:
-# 01000000013431623134306665356139313535313434363137636439633630386532383261633835323836313333303530393561353662636232613666376365333832316400000000d43437333034343032323032303062396136313532393135316639663236346130346539616131376262366531643533666233343537343763343438383562316531383561383263313735303232303065343130353966386162346433623337303964636239316230353063333434623036633530383666303535393864363262633036613862373436646234323930313231303235663062613063646338616139376563316666666430316661633334643361376637303062616630373635383034383236336132633932353832356538643333ffffffff0179cb10000000000032373661393134653539373763663931366163646261303130623964383437623936383231333561613365613831613838616300000000

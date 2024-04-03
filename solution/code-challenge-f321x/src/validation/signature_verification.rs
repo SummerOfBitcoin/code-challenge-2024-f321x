@@ -27,15 +27,25 @@ fn get_segwit_commitment_hash(tx: &Transaction, txin: &TxIn) -> Vec<u8> {
 	double_hash(&commitment)
 }
 
-fn verify_signature_p2wpkh(msg: &Vec<u8>, pubkey: &Vec<u8>, sig: &Vec<u8>) -> bool {
-	let mut sig = Signature::from_der(sig).expect("DER Sig loading failed!");
+fn verify_signature_p2wpkh(msg: &[u8], pubkey: &[u8], sig: &[u8]) -> bool {
+	let sig = &sig[..sig.len() - 1]; // remove sighash byte
+	let sig = Signature::from_der(sig);
+	let mut sig = match sig {
+		Ok(value) => value,
+		Err(err) => {
+			println!("Loading DER encoded signature failed: {}", err);
+			return false;
+		}
+	};
 	Signature::normalize_s(&mut sig);
-	let msg: [u8; 32] = msg.as_slice().try_into().expect("Commitment hash is not 32 byte!");
+	let msg: [u8; 32] = msg.try_into().expect("Commitment hash is not 32 byte!");
 	let msg = Message::from_digest(msg);
 	let pubkey = PublicKey::from_slice(pubkey).expect("Pubkey invalid!");
 	let result = sig.verify(&msg, &pubkey);
 	match result {
-		Ok(_) => true,
+		Ok(_) => {
+			true
+		},
 		Err(err) => {
 			println!("Signature verification failed: {}", err);
 			false
@@ -53,7 +63,6 @@ pub fn verify_p2wpkh(tx: &Transaction, txin: &TxIn) -> ValidationResult {
 		let witness_pubkey_20bit = hash160(&witness_pk);
 		let scriptpubkey_pubkey = hex::decode(txin.prevout.scriptpubkey.clone().split_off(4)).unwrap();
 		if  witness_pubkey_20bit ==  scriptpubkey_pubkey {
-			println!("Pubkeys are identical, nice!");
 			verify_signature_p2wpkh(&msg, &witness_pk, &witness_sig);
 		} else {
 			println!("Pubkeys unequal, witness: {} | scriptpubkey: {}", hex::encode(witness_pubkey_20bit), hex::encode(scriptpubkey_pubkey));
@@ -61,7 +70,5 @@ pub fn verify_p2wpkh(tx: &Transaction, txin: &TxIn) -> ValidationResult {
 	} else {
 		panic!("No witness in p2wpkh!");
 	}
-
-
 	ValidationResult::Valid
 }
