@@ -11,18 +11,15 @@ pub struct TxOut {
     pub	scriptpubkey:			Option<String>,
 	pub	scriptpubkey_asm:		String,
 	pub	scriptpubkey_type:		String,
-    #[serde_as(as = "NoneAsEmptyString")]
 	pub	scriptpubkey_address: 	Option<String>,
 	pub	value:					u64,
 }
 
-#[serde_as]
 #[derive(Deserialize, Debug)]
 pub struct Script {
 	pub	scriptpubkey:			String,
 	pub	scriptpubkey_asm:		String,
 	pub	scriptpubkey_type:		String,
-    #[serde_as(as = "NoneAsEmptyString")]
 	pub	scriptpubkey_address: 	Option<String>,
 	pub	value:					u64,
 }
@@ -30,16 +27,18 @@ pub struct Script {
 #[serde_as]
 #[derive(Deserialize, Debug)]
 pub struct TxIn {
-    pub txid:               String,
-    pub vout: 	            u32,
+    pub txid:                       String,
+    pub vout: 	                    u32,
     #[serde_as(as = "NoneAsEmptyString")]
-    pub scriptsig: 		    Option<String>,
+    pub scriptsig: 		            Option<String>,
     #[serde_as(as = "NoneAsEmptyString")]
-    pub scriptsig_asm:      Option<String>,
-	pub prevout:			Script,
-    pub witness: 			Option<Vec<String>>,
-    pub is_coinbase:        bool,
-    pub sequence: 			u32,
+    pub scriptsig_asm:              Option<String>,
+	pub prevout:			        Script,
+    pub witness: 			        Option<Vec<String>>,
+    pub inner_witnessscript_asm:    Option<String>,
+    pub inner_redeemscript_asm:     Option<String>,
+    pub is_coinbase:                bool,
+    pub sequence: 			        u32,
 }
 
 #[derive(Deserialize, Debug)]

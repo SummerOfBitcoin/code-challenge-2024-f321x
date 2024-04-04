@@ -3,7 +3,7 @@ use sha2::{Sha256, Digest};
 use std::path::Path;
 use super::utils::*;
 
-fn triple_hash(preimage: &Vec<u8>) -> String {
+fn triple_hash(preimage: &[u8]) -> String {
     let mut hasher = Sha256::new();
 	let result = double_hash(preimage);
     let txid: Vec<u8> = result.iter().rev().cloned().collect();
@@ -78,12 +78,7 @@ pub fn validate_txid_hash_filename(tx: &Transaction) -> bool {
         let path = Path::new(json_path);
         if let Some(filename) = path.file_stem() {
             if let Some(filename_str) = filename.to_str() {
-                if filename_str == triple_hashed {
-                    return true;
-                }
-				else {
-					return false;
-				}
+                return filename_str == triple_hashed;
             }
         }
     }

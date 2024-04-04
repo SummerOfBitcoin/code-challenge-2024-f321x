@@ -1,5 +1,3 @@
-use std::hash;
-
 use sha2::{Sha256, Digest};
 use ripemd::Ripemd160;
 use crate::parsing::transaction_structs::TxIn;
@@ -19,10 +17,10 @@ impl TransactionType {
 		let type_string = &txin.prevout.scriptpubkey_type;
 		match type_string.as_str() {
 			"v1_p2tr" => TransactionType::P2TR,
-			"p2pkh" => TransactionType::P2PKH,
-			"p2wsh" => TransactionType::P2WSH,
 			"v0_p2wpkh" => TransactionType::P2WPKH,
 			"v0_p2wsh" => TransactionType::P2WSH,
+			"p2sh" => TransactionType::P2SH,
+			"p2pkh" => TransactionType::P2PKH,
 			_ => TransactionType::UNKNOWN(type_string.to_string()),
 		}
 	}
@@ -39,21 +37,25 @@ pub fn get_outpoint(input: &TxIn) -> Vec<u8> {
 	outpoint
 }
 
-pub fn double_hash(preimage: &Vec<u8>) -> Vec<u8> {
-	let mut digest = preimage.clone();
-
+pub fn hash_sha256(preimage: &[u8]) -> Vec<u8> {
+	let mut digest = preimage.to_owned();
 	let mut hasher = Sha256::new();
+
+    hasher.update(&digest);
+	hasher.finalize_reset().to_vec()
+}
+
+pub fn double_hash(preimage: &[u8]) -> Vec<u8> {
+	let mut digest = preimage.to_owned();
+
     for _ in 0..2 {
-        hasher.update(&digest);
-        digest = hasher.finalize_reset().to_vec();
+		digest = hash_sha256(&digest);
     }
 	digest
 }
 
-pub fn hash160(preimage: &Vec<u8>) -> Vec<u8> {
-	let mut hasher256 = Sha256::new();
-	hasher256.update(&preimage.clone());
-	let preimage = hasher256.finalize_reset().to_vec();
+pub fn hash160(preimage: &[u8]) -> Vec<u8> {
+	let preimage = hash_sha256(preimage);
     let mut hasher = Ripemd160::new();
     hasher.update(&preimage);
     hasher.finalize().to_vec()
