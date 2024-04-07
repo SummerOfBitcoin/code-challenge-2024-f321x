@@ -1,6 +1,8 @@
 use sha2::{Sha256, Digest};
 use ripemd::Ripemd160;
 use crate::parsing::transaction_structs::TxIn;
+use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 
 #[derive(Debug)]
 pub enum TransactionType {
@@ -79,6 +81,16 @@ pub fn varint(n: u128) -> Vec<u8> {
     } else {
         panic!("Values larger than 0xffffffffffffffff not supported")
     }
+}
+
+// When used as numbers, byte vectors are interpreted as little-endian variable-length integers with the most significant 
+// bit determining the sign of the integer. Thus 0x81 represents -1. 0x80 is another representation of zero 
+// (so called negative 0). Positive 0 is represented by a null-length vector. 
+// Byte vectors are interpreted as Booleans where 
+// False is represented by any representation of zero and True is represented by any representation of non-zero. 
+pub fn decode_num(number:&Vec<u8>) -> i128 {
+	let number = num_bigint::BigInt::from_signed_bytes_le(number);
+	number.to_i128().expect("number outside of i128 scope")
 }
 
 // fn validate_ecdsa_signature(msg: String, pubkey: String, sig: String) -> bool {
