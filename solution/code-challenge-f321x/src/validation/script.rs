@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 use std::error::Error;
 
+use hex::decode;
+
 use crate::parsing::transaction_structs::{Transaction, TxIn};
 
 use super::utils::{hash160, hash_sha256, decode_num};
@@ -140,8 +142,25 @@ fn op_checksequenceverify(stack: &mut VecDeque<Vec<u8>>, txin: &TxIn, tx: &Trans
     Ok(())
 }
 
-fn op_checklocktimeverify(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
-    
+fn op_checklocktimeverify(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn) -> Result<(), String> {
+    if stack.is_empty() { return Err("OP_CLTV stack empty".to_string()) };
+    if let Some(top_item) = stack.pop_back() {
+        let decoded_number = decode_num(&top_item);
+        
+        if decoded_number < 0 { return Err("OP_CLTV number < 0".to_string()) };
+        let decoded_number: u32 = decoded_number as u32;
+        if (decoded_number < 500000000 && tx.locktime > 500000000)
+            || (decoded_number > 500000000 && tx.locktime < 500000000) {
+                return Err("OP_CLTV different locktime types".to_string());
+            }
+        if tx.locktime < decoded_number {
+            return Err(format!("OP_CLTV locktime {} < {} stack num.", 
+                                tx.locktime, decoded_number));
+        }
+        if txin.sequence == 0xffffffff as u32 {
+            return Err("OP_CLTV in sequence is 0xffffffff".to_string());
+        }
+    } else { return Err("OP_CLTV pop item failed".to_string()) };
     Ok(())
 }
 
@@ -186,16 +205,13 @@ pub fn evaluate_script(data: Vec<Vec<u8>>, script: Vec<u8>, txin: &TxIn, tx: &Tr
             0x88 => op_equalverify(&mut stack)?, // OP_EQUALVERIFY
             0x73 => op_ifdup(&mut stack)?, // OP_IFDUP
             0xb2 => op_checksequenceverify(&mut stack, txin, tx)?, // OP_CSV
-            0xb1 => op_checklocktimeverify(&mut stack)?, // OP_CLTV
+            0xb1 => op_checklocktimeverify(&mut stack, tx, txin)?, // OP_CLTV
             // 0x63 => if !op_if(&mut stack) { return false },  // OP_IF
             // 0x68 => // OP_ENDIF
         };
     }
     Ok(())
 }
-
-
-//     "OP_CLTV",
 
 //     "OP_IF",
 //     "OP_ELSE",
