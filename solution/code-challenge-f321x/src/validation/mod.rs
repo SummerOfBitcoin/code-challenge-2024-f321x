@@ -7,8 +7,8 @@ mod script;
 use crate::parsing::transaction_structs::Transaction;
 use self::validate_values::validate_values;
 use self::validate_parsing::validate_txid_hash_filename;
-use self::utils::TransactionType;
-use self::signature_verification::{verify_p2wpkh, verify_p2wsh};
+use self::utils::InputType;
+use self::signature_verification::{verify_p2wpkh, verify_p2wsh, verify_p2pkh};
 
 pub enum ValidationResult {
     Valid,
@@ -27,11 +27,23 @@ fn sanity_checks(tx: &Transaction) -> ValidationResult {
 
 fn signature_verification(tx: &Transaction) -> ValidationResult {
 	for txin in &tx.vin {
-		let tx_type = TransactionType::fetch(txin);
+		let tx_type = &txin.in_type;
+		// let result = match tx_type {
+		// 	InputType::P2PKH => {
+		// 		println!("p2pkh tx: {}", tx.json_path.as_ref().unwrap());
+		// 		std::process::exit(0);
+		// 	},
+		// 	_ => {
+		// 		println!("Weird type: {:#?}", tx_type);
+		// 		ValidationResult::Valid
+		// 	},
+		// };
 		let result = match tx_type {
-			TransactionType::P2WPKH => verify_p2wpkh(tx, txin),
-			TransactionType::P2WSH => verify_p2wsh(tx, txin),
-			TransactionType::P2SH => ValidationResult::Valid, // todo
+			// InputType::P2WPKH => verify_p2wpkh(tx, txin),
+			InputType::P2PKH => verify_p2pkh(tx, txin),
+
+			// InputType::P2WSH => verify_p2wsh(tx, txin),
+			// InputType::P2SH => ValidationResult::Valid, // todo
 			_ => {
 				println!("Weird type: {:#?}", tx_type);
 				ValidationResult::Valid
@@ -64,4 +76,3 @@ impl Transaction {
 		ValidationResult::Valid
 	}
 }
-

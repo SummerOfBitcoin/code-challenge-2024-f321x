@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
-use crate::validation::utils::{get_outpoint, varint};
+use crate::validation::utils::{get_outpoint, varint, InputType};
 
 #[serde_as]
 #[derive(Deserialize, Debug)]
@@ -15,7 +15,7 @@ pub struct TxOut {
 	pub	value:					u64,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, PartialEq)]
 pub struct Script {
 	pub	scriptpubkey:			String,
 	pub	scriptpubkey_asm:		String,
@@ -25,8 +25,10 @@ pub struct Script {
 }
 
 #[serde_as]
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, PartialEq)]
 pub struct TxIn {
+    #[serde(skip_deserializing)]
+    pub in_type:                    InputType,
     pub txid:                       String,
     pub vout: 	                    u32,
     #[serde_as(as = "NoneAsEmptyString")]

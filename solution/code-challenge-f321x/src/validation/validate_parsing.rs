@@ -29,7 +29,7 @@ fn serialize_input(input: &TxIn) -> Vec<u8> {
 	serialized_input
 }
 
-fn	serialize_output(output: &TxOut) -> Vec<u8> {
+pub fn	serialize_output(output: &TxOut) -> Vec<u8> {
 	let mut serialized_output: Vec<u8> = Vec::new();
 	let value = output.value.to_le_bytes();
 	let pubkey_script_len = match &output.scriptpubkey {

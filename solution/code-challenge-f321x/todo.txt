@@ -1,0 +1,2 @@
+P2WPKH -> sighash types -> parse used types and implement
+

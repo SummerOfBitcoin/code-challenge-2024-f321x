@@ -5,6 +5,7 @@ pub mod transaction_structs;
 use std::fs;
 use self::transaction_structs::Transaction;
 use serde_json::from_str;
+use crate::validation::utils::InputType;
 
 fn parse_json(str_content: &str) -> Option<Transaction> {
 	let tx = from_str::<Transaction>(str_content);
@@ -30,6 +31,9 @@ fn parse_file_content(file_to_load: fs::DirEntry) -> Option<Transaction> {
 										.to_str()
 										.expect("Path to string conversion failed!")
 										.to_string());
+			for txin in &mut tx.vin {
+				InputType::fetch_type(txin);
+			}
 			Some(tx)
 		},
 		None => {

@@ -21,7 +21,7 @@ use validation::ValidationResult;
 // }
 
 fn main() {
-    let parsed_transactions = parse_transactions_from_dir("/workspaces/code-challenge-2024-f321x/testfiles");
+    let parsed_transactions = parse_transactions_from_dir("/workspaces/code-challenge-2024-f321x/testfiles/p2pkh");
 
     let mut tx_count = 0;
     // let mut opcodes = Vec::new();
@@ -29,7 +29,9 @@ fn main() {
       // let set: HashSet<String> = opcodes.into_iter().chain(count_opcodes(tx).into_iter()).collect();
       // opcodes = set.into_iter().collect();
       match tx.validate() {
-        ValidationResult::Valid => (),
+        ValidationResult::Valid => {
+          println!("VALID");
+        },
         ValidationResult::Invalid(msg) => {
           panic!("Transaction {:#?} invalid. Reason {}\n", tx.json_path, msg);
         }

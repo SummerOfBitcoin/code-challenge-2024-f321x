@@ -1,11 +1,10 @@
 use sha2::{Sha256, Digest};
 use ripemd::Ripemd160;
 use crate::parsing::transaction_structs::TxIn;
-use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
-#[derive(Debug)]
-pub enum TransactionType {
+#[derive(Debug, PartialEq)]
+pub enum InputType {
 	P2TR,
 	P2PKH,
 	P2SH,
@@ -14,17 +13,23 @@ pub enum TransactionType {
 	UNKNOWN(String),
 }
 
-impl TransactionType {
-	pub fn fetch(txin: &TxIn) -> TransactionType {
+impl Default for InputType {
+    fn default() -> Self {
+        InputType::UNKNOWN("notSerialized".to_string())
+    }
+}
+
+impl InputType {
+	pub fn fetch_type(txin: &mut TxIn) -> () {
 		let type_string = &txin.prevout.scriptpubkey_type;
-		match type_string.as_str() {
-			"v1_p2tr" => TransactionType::P2TR,
-			"v0_p2wpkh" => TransactionType::P2WPKH,
-			"v0_p2wsh" => TransactionType::P2WSH,
-			"p2sh" => TransactionType::P2SH,
-			"p2pkh" => TransactionType::P2PKH,
-			_ => TransactionType::UNKNOWN(type_string.to_string()),
-		}
+		txin.in_type = match type_string.as_str() {
+			"v1_p2tr" => InputType::P2TR,
+			"v0_p2wpkh" => InputType::P2WPKH,
+			"v0_p2wsh" => InputType::P2WSH,
+			"p2sh" => InputType::P2SH,
+			"p2pkh" => InputType::P2PKH,
+			_ => InputType::UNKNOWN(type_string.to_string()),
+		};
 	}
 }
 
@@ -83,11 +88,11 @@ pub fn varint(n: u128) -> Vec<u8> {
     }
 }
 
-// When used as numbers, byte vectors are interpreted as little-endian variable-length integers with the most significant 
-// bit determining the sign of the integer. Thus 0x81 represents -1. 0x80 is another representation of zero 
-// (so called negative 0). Positive 0 is represented by a null-length vector. 
-// Byte vectors are interpreted as Booleans where 
-// False is represented by any representation of zero and True is represented by any representation of non-zero. 
+// When used as numbers, byte vectors are interpreted as little-endian variable-length integers with the most significant
+// bit determining the sign of the integer. Thus 0x81 represents -1. 0x80 is another representation of zero
+// (so called negative 0). Positive 0 is represented by a null-length vector.
+// Byte vectors are interpreted as Booleans where
+// False is represented by any representation of zero and True is represented by any representation of non-zero.
 pub fn decode_num(number:&Vec<u8>) -> i128 {
 	let number = num_bigint::BigInt::from_signed_bytes_le(number);
 	number.to_i128().expect("number outside of i128 scope")

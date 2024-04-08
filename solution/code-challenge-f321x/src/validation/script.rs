@@ -1,18 +1,17 @@
+use core::panic;
 use std::collections::VecDeque;
 use std::error::Error;
-
-use hex::decode;
+use hex_literal::hex as hexlit;
+use secp256k1::{ecdsa::Signature, Message, PublicKey};
 
 use crate::parsing::transaction_structs::{Transaction, TxIn};
-
-use super::utils::{hash160, hash_sha256, decode_num};
+use super::validate_parsing::serialize_output;
+use super::utils::{decode_num, hash160, hash_sha256, InputType, varint, get_outpoint, double_hash};
 
 fn op_swap(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     if stack.len() >= 2 {
         let len = stack.len();
-        let last = stack.get_mut(len - 1).expect("OP_SWAP last!");
-        let second_last = stack.get_mut(len - 2).expect("OP_SWAP second last!");
-        std::mem::swap(last, second_last);
+        stack.swap(len - 1, len - 2);
         return Ok(());
     }
     Err("OP_SWAP stack < 2")
@@ -35,9 +34,9 @@ fn op_equal(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
 
 fn op_rot(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     if stack.len() >= 3 {
-        let third_item = stack.pop_back().expect("OP_ROT");
-        let second_item = stack.pop_back().expect("OP_ROT");
-        let first_item = stack.pop_back().expect("OP_ROT");
+        let third_item = stack.pop_back().expect("OP_ROT pop_back");
+        let second_item = stack.pop_back().expect("OP_ROT pop_back");
+        let first_item = stack.pop_back().expect("OP_ROT pop_back");
         stack.push_back(second_item);
         stack.push_back(first_item);
         stack.push_back(third_item);
@@ -95,8 +94,8 @@ fn op_greaterthan(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
 fn op_equalverify(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     op_equal(stack)?;
     if let Some(bool) = stack.pop_back() {
-        if bool.is_empty() { 
-            return Err("Equalverify false"); 
+        if bool.is_empty() {
+            return Err("Equalverify false");
         } else { return Ok(()) };
     } else { return Err("OP_EQUALVERIFY stack pop failed") };
 }
@@ -114,8 +113,8 @@ fn op_ifdup(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     } else { return Err("OP_IFDUP getting last element failed") };
 }
 
-// Marks transaction as invalid if the relative lock time of the input (enforced by BIP 0068 with nSequence) 
-// is not equal to or longer than the value of the top stack item. The precise semantics are described in BIP 0112. 
+// Marks transaction as invalid if the relative lock time of the input (enforced by BIP 0068 with nSequence)
+// is not equal to or longer than the value of the top stack item. The precise semantics are described in BIP 0112.
 // Assume relative locktimes are valid
 fn op_checksequenceverify(stack: &mut VecDeque<Vec<u8>>, txin: &TxIn, tx: &Transaction) -> Result<(), &'static str> {
 // check tx version >= 2
@@ -146,7 +145,7 @@ fn op_checklocktimeverify(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin:
     if stack.is_empty() { return Err("OP_CLTV stack empty".to_string()) };
     if let Some(top_item) = stack.pop_back() {
         let decoded_number = decode_num(&top_item);
-        
+
         if decoded_number < 0 { return Err("OP_CLTV number < 0".to_string()) };
         let decoded_number: u32 = decoded_number as u32;
         if (decoded_number < 500000000 && tx.locktime > 500000000)
@@ -154,7 +153,7 @@ fn op_checklocktimeverify(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin:
                 return Err("OP_CLTV different locktime types".to_string());
             }
         if tx.locktime < decoded_number {
-            return Err(format!("OP_CLTV locktime {} < {} stack num.", 
+            return Err(format!("OP_CLTV locktime {} < {} stack num.",
                                 tx.locktime, decoded_number));
         }
         if txin.sequence == 0xffffffff as u32 {
@@ -164,16 +163,105 @@ fn op_checklocktimeverify(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin:
     Ok(())
 }
 
-pub fn evaluate_script(data: Vec<Vec<u8>>, script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result<(), Box<dyn Error>> {
+fn serialize_input_legacy(input: &TxIn, signing_txin: &TxIn) -> Vec<u8> {
+	let mut serialized_input = get_outpoint(input);
+
+    if input == signing_txin {
+        let scriptpubkey_len = match &input.scriptsig {
+            Some(s) => {varint(hex::decode(s)
+                .expect("Hex decode ss len failed")
+                .len() as u128)
+            },
+        	None => panic!("OP_CHECKSIG legacy scriptpubkey len serialization failed"),
+        };
+        serialized_input.extend(scriptpubkey_len);
+        serialized_input.extend(hex::decode(&signing_txin.prevout.scriptpubkey)
+                                                    .expect("OP_CHECKSIG scriptpubkey hex decode failed"));
+    } else {
+        serialized_input.extend(hexlit!("00"));
+    }
+	serialized_input.extend(input.sequence.to_le_bytes());
+	serialized_input
+}
+
+fn serialize_legacy_tx(tx: &Transaction, signing_txin: &TxIn, sighash: u32) -> Vec<u8> {
+    let mut preimage: Vec<u8> = Vec::new();
+
+    preimage.extend(&tx.version.to_le_bytes());  // VERSION
+    preimage.extend(varint(tx.vin.len() as u128));  // INPUT amount
+
+	for tx_in in &tx.vin {
+		preimage.append(&mut serialize_input_legacy(tx_in, signing_txin));
+	}
+	preimage.extend(varint(tx.vout.len() as u128));  // Output amount
+	for tx_out in &tx.vout {
+		preimage.append(&mut serialize_output(tx_out));
+	}
+	preimage.extend(tx.locktime.to_le_bytes());
+    preimage.extend(sighash.to_le_bytes());
+    double_hash(&preimage)
+}
+
+fn verify_sig_op_checksig(msg: &[u8], pubkey: &[u8], sig: &[u8]) -> Result<(), String> {
+	let sig = Signature::from_der(sig);
+	let mut sig = match sig {
+		Ok(value) => value,
+		Err(err) => {
+			return Err(format!("Loading DER encoded signature failed: {}", err));
+		}
+	};
+	Signature::normalize_s(&mut sig);
+	let msg: [u8; 32] = msg.try_into().expect("Commitment hash is not 32 byte!");
+	let msg = Message::from_digest(msg);
+	let pubkey = PublicKey::from_slice(pubkey).expect("Pubkey invalid!");
+	let result = sig.verify(&msg, &pubkey);
+	match result {
+		Ok(_) => Ok(()),
+		Err(err) => Err(format!("Signature verification failed: {}", err)),
+	}
+}
+
+// for now implemented for non-witness transactions
+fn op_checksig(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn) -> Result<(), String> {
+    if stack.len() < 2 {return Err("OP_CHECKSIG stack < 2".to_string())};
+    let pubkey = if let Some(pubkey) = stack.pop_back() {
+        pubkey
+    } else { return Err("OP_CHECKSIG popping pubkey from stack failed!".to_string()) };
+    let mut der_signature = if let Some(signature) = stack.pop_back() {
+        signature
+    } else { return Err("OP_CHECKSIG popping signature from stack failed!".to_string()) };
+    let sighash: u32 = if let Some(sighash_byte) = der_signature.pop() {
+        sighash_byte as u32
+    } else { return Err("OP_CHECKSIG popping sighash from signature failed".to_string()) };
+    let message = match txin.in_type {
+        InputType::P2PKH => serialize_legacy_tx(tx, txin, sighash),
+        // InputType::P2SH => serialize_legacy_tx(tx, txin, sighash, sub_script),
+        _ => panic!("op_checksig unsupported txtype")
+    };
+    match verify_sig_op_checksig(&message, &pubkey, &der_signature) {
+        Ok(_) => stack.push_back(vec![1u8]),
+        Err(_) => stack.push_back(vec![]),
+    }
+    Ok(())
+}
+
+fn op_verify(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
+    if let Some(top_stack_element) = stack.pop_back() {
+        if top_stack_element.is_empty() {
+            return Err("OP_VERIFY not valid")
+        } else {
+            return Ok(());
+        }
+    } else { return Err("OP_VERIFY popping top stack element failed") };
+}
+
+pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result<(), Box<dyn Error>> {
     let mut stack: VecDeque<Vec<u8>> = VecDeque::new();
     // let mut flow_stack: Vec<Flow> = Vec::new();
 
-    for element in data {
-        stack.push_back(element);
-    }
     for opcode in script {
         match opcode {
-            0xa8 => {   // OP_SHA256
+            0xa8 => { // SHA256
                 if let Some(last) = stack.pop_back() {
                     stack.push_back(hash_sha256(&last));
                 } else {
@@ -186,19 +274,19 @@ pub fn evaluate_script(data: Vec<Vec<u8>>, script: Vec<u8>, txin: &TxIn, tx: &Tr
                 } else {
                     return Err("OP_HASH160 stack empty".into());
                 }
-            } 
-            0x76 => if stack.pop_back().is_none() { return Err("OP_DROP stack empty".into()) }, // OP_DROP 
+            }
+            0x75 => if stack.pop_back().is_none() { return Err("OP_DROP stack empty".into()) }, // OP_DROP
             0x7c => op_swap(&mut stack)?,
-            0x00 => stack.push_back(Vec::new()),    // OP_0
-            0x76 => {                       // OP_DUP
+            0x00 => stack.push_back(Vec::new()), // OP_0
+            0x76 => { // OP_DUP
                 if let Some(last) = stack.back() {
                     stack.push_back(last.clone());
                 } else {
                     return Err("OP_DUP stack empty.".into())
-                }                                  
+                }
             }
             0x87 => op_equal(&mut stack)?, // OP_EQUAL
-            0x7b => op_rot(&mut stack)?,    // OP_ROT
+            0x7b => op_rot(&mut stack)?,   // OP_ROT
             0x82 => op_size(&mut stack)?, // OP_SIZE
             0x78 => op_over(&mut stack)?, // OP_OVER
             0xa0 => op_greaterthan(&mut stack)?, // OP_GREATERTHAN
@@ -206,8 +294,14 @@ pub fn evaluate_script(data: Vec<Vec<u8>>, script: Vec<u8>, txin: &TxIn, tx: &Tr
             0x73 => op_ifdup(&mut stack)?, // OP_IFDUP
             0xb2 => op_checksequenceverify(&mut stack, txin, tx)?, // OP_CSV
             0xb1 => op_checklocktimeverify(&mut stack, tx, txin)?, // OP_CLTV
+            0xac => op_checksig(&mut stack, tx, txin)?,  // OP_CHECKSIG
+            0xad => {  // OP_CHECKSIGVERIFY
+                op_checksig(&mut stack, tx, txin)?;
+                op_verify(&mut stack)?;
+            }
             // 0x63 => if !op_if(&mut stack) { return false },  // OP_IF
             // 0x68 => // OP_ENDIF
+            _ => panic!("no script operator found!"),
         };
     }
     Ok(())
