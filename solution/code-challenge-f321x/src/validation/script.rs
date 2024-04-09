@@ -2,6 +2,7 @@ use core::panic;
 use std::collections::VecDeque;
 use std::error::Error;
 use hex_literal::hex as hexlit;
+use num_traits::ToBytes;
 use secp256k1::{ecdsa::Signature, Message, PublicKey};
 
 use crate::parsing::transaction_structs::{Transaction, TxIn};
@@ -19,8 +20,8 @@ fn op_swap(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
 
 fn op_equal(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     if stack.len() >= 2 {
-        let last = decode_num(&stack.pop_back().expect("Unwrap op_equal"));
-        let second_last = decode_num(&stack.pop_back().expect("OP_Equal"));
+        let last = &stack.pop_back().expect("Unwrap op_equal");
+        let second_last = &stack.pop_back().expect("OP_Equal");
         if last == second_last {
             stack.push_back(vec![1u8]);
             return Ok(());
@@ -167,13 +168,9 @@ fn serialize_input_legacy(input: &TxIn, signing_txin: &TxIn) -> Vec<u8> {
 	let mut serialized_input = get_outpoint(input);
 
     if input == signing_txin {
-        let scriptpubkey_len = match &input.scriptsig {
-            Some(s) => {varint(hex::decode(s)
-                .expect("Hex decode ss len failed")
-                .len() as u128)
-            },
-        	None => panic!("OP_CHECKSIG legacy scriptpubkey len serialization failed"),
-        };
+        let scriptpubkey_len = varint(hex::decode(&signing_txin.prevout.scriptpubkey)
+                                                    .expect("serialize_input_legacy hex encoding")
+                                                    .len() as u128);
         serialized_input.extend(scriptpubkey_len);
         serialized_input.extend(hex::decode(&signing_txin.prevout.scriptpubkey)
                                                     .expect("OP_CHECKSIG scriptpubkey hex decode failed"));
@@ -255,19 +252,35 @@ fn op_verify(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     } else { return Err("OP_VERIFY popping top stack element failed") };
 }
 
-fn op_pushnum(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
-    if let Some(amount) = stack.pop_back() {
-        let mut number:u8 = amount[0] - 80;
+fn op_pushnum(stack: &mut VecDeque<Vec<u8>>, amount: u8) -> Result<(), &'static str> {
+    let number:u8 = amount - 80;
+    let mut number_bytes: Vec<u8> = Vec::new();
+    number_bytes.push(number);
+    stack.push_back(number_bytes);
+    Ok(())
+}
 
-    } else { return Err("OP_PUSHNUM failed to pop opcode") };
+fn op_pushbytes(stack: &mut VecDeque<Vec<u8>>, index: &mut usize, script: &Vec<u8>) -> Result<(), &'static str> {
+    let opcode: u8 = script[*index];
+    let mut bytes: Vec<u8> = Vec::new();
+
+    if *index + opcode as usize <= script.len() {
+        bytes.resize(opcode as usize, 0);
+        bytes.clone_from_slice(&script[*index + 1 ..*index + 1 + opcode as usize]);
+        stack.push_back(bytes);
+        *index += opcode as usize;
+    } else {
+        return Err("OP_PUSHBYTES opcode out of range");
+    }
     Ok(())
 }
 
 pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result<(), Box<dyn Error>> {
     let mut stack: VecDeque<Vec<u8>> = VecDeque::new();
     // let mut flow_stack: Vec<Flow> = Vec::new();
-
-    for opcode in script {
+    let mut index = 0;
+    while index < script.len() {
+        let opcode = script[index];
         match opcode {
             0xa8 => { // SHA256
                 if let Some(last) = stack.pop_back() {
@@ -307,12 +320,18 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
                 op_checksig(&mut stack, tx, txin)?;
                 op_verify(&mut stack)?;
             }
-            0x51 ..= 0x60 => op_pushnum(&mut stack),
-            0x4f =>
-            0x01 ..= 0x4b =>
+            0x51 ..= 0x60 => op_pushnum(&mut stack, opcode)?, // OP_PUSHNUM (1-16)
+            0x4f => stack.push_back(vec![255]),  // OP_1NEGATE
+            0x01 ..= 0x4b => op_pushbytes(&mut stack, &mut index, &script)?,
             // 0x63 => if !op_if(&mut stack) { return false },  // OP_IF
             // 0x68 => // OP_ENDIF
             _ => panic!("no script operator found!"),
+        };
+        index += 1;
+    }
+    if let Some(last) = stack.pop_back() {
+        if last.is_empty() {
+            return Err(format!("SCRIPT INVALID {}", &tx.json_path.as_ref().unwrap()).into());
         };
     }
     Ok(())
@@ -326,23 +345,6 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
 //     "OP_CHECKSIG",
 //     "OP_CHECKMULTISIG",
 //     "OP_CHECKSIGVERIFY",
-
-//     "OP_PUSHBYTES_2",
-//     "OP_PUSHBYTES_1",
-//     "OP_PUSHNUM_2",
-//     "OP_PUSHBYTES_33",
-//     "OP_PUSHBYTES_32",
-//     "OP_PUSHBYTES_3",
-//     "OP_PUSHNUM_1",
-//     "OP_PUSHNUM_5",
-//     "OP_PUSHNUM_6",
-//     "OP_PUSHBYTES_20",
-//     "OP_PUSHBYTES_4",
-//     "OP_PUSHNUM_4",
-//     "OP_PUSHNUM_10",
-//     "OP_PUSHNUM_3",
-//     "OP_PUSHNUM_16",
-// ]
 
             // 0x63 => { // OP_IF
             //     let condition = stack.pop_back().unwrap();

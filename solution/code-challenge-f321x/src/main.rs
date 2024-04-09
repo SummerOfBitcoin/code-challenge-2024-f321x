@@ -28,6 +28,7 @@ fn main() {
     for tx in &parsed_transactions {
       // let set: HashSet<String> = opcodes.into_iter().chain(count_opcodes(tx).into_iter()).collect();
       // opcodes = set.into_iter().collect();
+      println!("EVALUATING: {}", &tx.json_path.as_ref().unwrap());
       match tx.validate() {
         ValidationResult::Valid => {
           println!("VALID");
