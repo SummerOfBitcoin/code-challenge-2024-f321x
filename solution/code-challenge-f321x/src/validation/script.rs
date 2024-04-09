@@ -255,6 +255,14 @@ fn op_verify(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     } else { return Err("OP_VERIFY popping top stack element failed") };
 }
 
+fn op_pushnum(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
+    if let Some(amount) = stack.pop_back() {
+        let mut number:u8 = amount[0] - 80;
+
+    } else { return Err("OP_PUSHNUM failed to pop opcode") };
+    Ok(())
+}
+
 pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result<(), Box<dyn Error>> {
     let mut stack: VecDeque<Vec<u8>> = VecDeque::new();
     // let mut flow_stack: Vec<Flow> = Vec::new();
@@ -299,6 +307,9 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
                 op_checksig(&mut stack, tx, txin)?;
                 op_verify(&mut stack)?;
             }
+            0x51 ..= 0x60 => op_pushnum(&mut stack),
+            0x4f =>
+            0x01 ..= 0x4b =>
             // 0x63 => if !op_if(&mut stack) { return false },  // OP_IF
             // 0x68 => // OP_ENDIF
             _ => panic!("no script operator found!"),
