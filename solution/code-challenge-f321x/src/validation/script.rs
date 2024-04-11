@@ -1,8 +1,8 @@
-use core::panic;
+use core::{num, panic};
 use std::collections::VecDeque;
 use std::error::Error;
 use hex_literal::hex as hexlit;
-use num_traits::ToBytes;
+use byteorder::{ByteOrder, LittleEndian};
 use secp256k1::{ecdsa::Signature, Message, PublicKey};
 
 use crate::parsing::transaction_structs::{Transaction, TxIn};
@@ -126,8 +126,9 @@ fn op_checksequenceverify(stack: &mut VecDeque<Vec<u8>>, txin: &TxIn, tx: &Trans
     if stack.is_empty() { return Err("OP_CSV stack empty") };
 
     if let Some(locktime_element) = stack.pop_back() {
-        let number = decode_num(&locktime_element) as u32;
+        let number = decode_num(&locktime_element);
         if number < 0 || locktime_element.is_empty() { return Err("OP_CSV number < 0 or empty") };
+        let number = number as u32;
 
         if (number & disable_flag) == 0 {
             if tx.version < 2 { return Err("OP_CSV Transaction version is less than 2.") };
@@ -196,6 +197,7 @@ fn serialize_legacy_tx(tx: &Transaction, signing_txin: &TxIn, sighash: u32) -> V
 	}
 	preimage.extend(tx.locktime.to_le_bytes());
     preimage.extend(sighash.to_le_bytes());
+
     double_hash(&preimage)
 }
 
@@ -230,9 +232,12 @@ fn op_checksig(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn) -> 
     let sighash: u32 = if let Some(sighash_byte) = der_signature.pop() {
         sighash_byte as u32
     } else { return Err("OP_CHECKSIG popping sighash from signature failed".to_string()) };
+    if sighash != 0x00000001 {  // IMPLEMENT OTHER SIGHASH TYPES
+        return Err("sighash not implemented".to_string());
+    }
     let message = match txin.in_type {
         InputType::P2PKH => serialize_legacy_tx(tx, txin, sighash),
-        // InputType::P2SH => serialize_legacy_tx(tx, txin, sighash, sub_script),
+        InputType::P2SH => serialize_legacy_tx(tx, txin, sighash),
         _ => panic!("op_checksig unsupported txtype")
     };
     match verify_sig_op_checksig(&message, &pubkey, &der_signature) {
@@ -275,9 +280,113 @@ fn op_pushbytes(stack: &mut VecDeque<Vec<u8>>, index: &mut usize, script: &Vec<u
     Ok(())
 }
 
+pub fn get_pushdata_amount(script: &Vec<u8>, amount_bytes: u8, current_index: usize) -> Result<u32, &'static str> {
+    let mut amount_of_bytes_to_push: Vec<u8> = Vec::new();
+
+    amount_of_bytes_to_push.resize(amount_bytes as usize, 0);
+    amount_of_bytes_to_push.clone_from_slice(&script[current_index + 1 ..current_index + 1 + amount_bytes as usize]);
+    match amount_bytes {
+        1 => Ok(amount_of_bytes_to_push[0] as u32),
+        2 => Ok(LittleEndian::read_u16(&amount_of_bytes_to_push) as u32),
+        4 => Ok(LittleEndian::read_u32(&amount_of_bytes_to_push)),
+        _ => return Err("get_pushdata_amount weird amount in match"),
+    }
+}
+
+fn op_pushdata(stack: &mut VecDeque<Vec<u8>>, amount_bytes: u8, index: &mut usize, script: &Vec<u8>) -> Result<(), &'static str> {
+    let mut data_push: Vec<u8> = Vec::new();
+
+    let amount_of_bytes_to_push = get_pushdata_amount(script, amount_bytes, *index)?;
+    *index += amount_bytes as usize + 1;
+    // println!("DATA amount to push: {} | Start index: {}", amount_of_bytes_to_push, hex::encode(&script[*index ..*index + 2]));
+    data_push.resize(amount_of_bytes_to_push as usize, 0);
+    data_push.clone_from_slice(&script[*index..*index + amount_of_bytes_to_push as usize]);
+    stack.push_back(data_push);
+    *index += amount_of_bytes_to_push as usize - 1;
+    Ok(())
+}
+
+fn op_depth(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
+    stack.push_back(varint(stack.len() as u128));
+    Ok(())
+}
+
+// x sig1 sig2 ... <number of signatures> pub1 pub2 <number of public keys>
+fn op_checkmultisig(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn) -> Result<(), &'static str> {
+    let mut signatures: VecDeque<Vec<u8>> = VecDeque::new();
+    let mut pubkeys: VecDeque<Vec<u8>> = VecDeque::new();
+    let number_of_pubkeys;
+    let mut number_of_signatures;
+
+    if let Some(pubkey_amount) = stack.pop_back() {
+        number_of_pubkeys = pubkey_amount[0];  // should be enough for these scripts
+        for _ in 0..number_of_pubkeys {
+            if let Some(pubkey) = stack.pop_back() {
+                pubkeys.push_back(pubkey);
+            } else { return Err("OP_CHECKMULTISIG error popping pubkey from stack") };
+        }
+    } else { return Err("OP_CHECKMULTISIG error popping number of pubkeys") };
+    if let Some(signature_amount) = stack.pop_back() {
+        number_of_signatures = signature_amount[0];
+        for _ in 0..number_of_signatures {
+            if let Some(signature) = stack.pop_back() {
+                signatures.push_front(signature);
+            } else { return Err("OP_CHECKMULTISIG error popping signature from stack") };
+        }
+        stack.pop_back();  // OP_CHECKMULTISIG BUG
+    } else { return Err("OP_CHECKMULTISIG error popping number of signatures") };
+
+    'outer: for mut signature in signatures {
+        let mut retry = true;
+
+        let sighash: u32 = if let Some(sighash_byte) = signature.pop() {
+            sighash_byte as u32
+        } else { return Err("OP_CHECKSIG popping sighash from signature failed") };
+        if sighash != 0x00000001 {  // IMPLEMENT OTHER SIGHASH TYPES
+            return Err("OP_CHECKMULTISIG sighash not implemented");
+        };
+        let message = match txin.in_type {
+            InputType::P2SH => serialize_legacy_tx(tx, txin, sighash),
+            _ => panic!("op_checkmultisig unsupported txtype")
+        };
+
+        while retry {
+            if let Some(pubkey) = pubkeys.pop_back() {
+                retry = false;
+                // println!("CHECKMULTISIG -> \nPubkey {} \nSignature {}\n\n", hex::encode(&pubkey), hex::encode(&signature));
+                match verify_sig_op_checksig(&message, &pubkey, &signature) {
+                    Ok(_) => {
+                        number_of_signatures -= 1;
+                        println!("VALID SIGNATURE OPCHECKMULTISIG!");
+                    },
+                    Err(err) => {
+                        println!("{}", err);
+                        retry = true;
+                    },
+                };
+            } else {
+                break 'outer;
+            };
+        };
+    };
+    if number_of_signatures == 0 {
+        stack.push_back(vec![1u8]);
+    } else {
+        stack.push_back(vec![]);
+    };
+    Ok(())
+}
+
+// Compares the first signature against each public key until it finds an ECDSA match. Starting with the subsequent public key, it compares the second signature against each remaining public key
+// until it finds an ECDSA match.
+// The process is repeated until all signatures have been checked or not enough public keys remain to produce a successful result.
+// All signatures need to match a public key. Because public keys are not checked again if they fail any signature comparison, signatures must be placed in the scriptSig using the same order as
+// their corresponding public keys were placed in the scriptPubKey or redeemScript. If all signatures are valid, 1 is returned, 0 otherwise. Due to a bug, one extra unused value is removed from the stack.
+
 pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result<(), Box<dyn Error>> {
     let mut stack: VecDeque<Vec<u8>> = VecDeque::new();
     // let mut flow_stack: Vec<Flow> = Vec::new();
+
     let mut index = 0;
     while index < script.len() {
         let opcode = script[index];
@@ -295,7 +404,7 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
                 } else {
                     return Err("OP_HASH160 stack empty".into());
                 }
-            }
+            },
             0x75 => if stack.pop_back().is_none() { return Err("OP_DROP stack empty".into()) }, // OP_DROP
             0x7c => op_swap(&mut stack)?,
             0x00 => stack.push_back(Vec::new()), // OP_0
@@ -305,7 +414,7 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
                 } else {
                     return Err("OP_DUP stack empty.".into())
                 }
-            }
+            },
             0x87 => op_equal(&mut stack)?, // OP_EQUAL
             0x7b => op_rot(&mut stack)?,   // OP_ROT
             0x82 => op_size(&mut stack)?, // OP_SIZE
@@ -316,13 +425,18 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
             0xb2 => op_checksequenceverify(&mut stack, txin, tx)?, // OP_CSV
             0xb1 => op_checklocktimeverify(&mut stack, tx, txin)?, // OP_CLTV
             0xac => op_checksig(&mut stack, tx, txin)?,  // OP_CHECKSIG
+            0x74 => op_depth(&mut stack)?, // OP_DEPTH
             0xad => {  // OP_CHECKSIGVERIFY
                 op_checksig(&mut stack, tx, txin)?;
                 op_verify(&mut stack)?;
-            }
+            },
             0x51 ..= 0x60 => op_pushnum(&mut stack, opcode)?, // OP_PUSHNUM (1-16)
             0x4f => stack.push_back(vec![255]),  // OP_1NEGATE
             0x01 ..= 0x4b => op_pushbytes(&mut stack, &mut index, &script)?,
+            0x4c => op_pushdata(&mut stack, 1, &mut index, &script)?,
+            0x4d => op_pushdata(&mut stack, 2, &mut index, &script)?,
+            0x4e => op_pushdata(&mut stack, 4, &mut index, &script)?,
+            0xae => op_checkmultisig(&mut stack, tx, txin)?,
             // 0x63 => if !op_if(&mut stack) { return false },  // OP_IF
             // 0x68 => // OP_ENDIF
             _ => panic!("no script operator found!"),
@@ -331,7 +445,7 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
     }
     if let Some(last) = stack.pop_back() {
         if last.is_empty() {
-            return Err(format!("SCRIPT INVALID {}", &tx.json_path.as_ref().unwrap()).into());
+            return Err("SCRIPT INVALID".into());//, &tx.json_path.as_ref().unwrap()).into());
         };
     }
     Ok(())
@@ -342,9 +456,6 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
 //     "OP_ENDIF",
 //     "OP_NOTIF",
 
-//     "OP_CHECKSIG",
-//     "OP_CHECKMULTISIG",
-//     "OP_CHECKSIGVERIFY",
 
             // 0x63 => { // OP_IF
             //     let condition = stack.pop_back().unwrap();
@@ -391,158 +502,4 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
 //     } else { return false };
 // }
 
-// {
-// 	"version": 2,
-// 	"locktime": 834636,
-// 	"vin": [
-// 	  {
-// 		"txid": "11bdafffffe2e59d6c901780a20d8a7b660762112b58157f1c6f20e705305be3",
-// 		"vout": 0,
-// 		"prevout": {
-// 		  "scriptpubkey": "00208277c212d2fa741a578d730cd0838cafc62db7558aedef1a24ab960a0a518898",
-// 		  "scriptpubkey_asm": "OP_0 OP_PUSHBYTES_32 8277c212d2fa741a578d730cd0838cafc62db7558aedef1a24ab960a0a518898",
-// 		  "scriptpubkey_type": "v0_p2wsh",
-// 		  "scriptpubkey_address": "bc1qsfmuyykjlf6p54udwvxdpquv4lrzmd643tk77x3y4wtq5zj33zvqpt9a38",
-// 		  "value": 72956
-// 		},
-// 		"scriptsig": "",
-// 		"scriptsig_asm": "",
-// 		"witness": [
-// 		  "3044022032c5730560154cc4a73cde8d0450ffe85a51134723acfa9789aa6b9b062b896a02206783334ed6f1b95ea833361a9a98cf72540d4c3863477bf93759bde492255a8a01",
-// 		  "",
-// 		  "a9148866a92ac65ad8ef9d3247de2c5e6d4a679e7db1876321038fd7724247548b1d350e721b094389b821dd07f6cea1bc6aee2298ab3708b2f267022001b2752102e1ed24f0f0ef10fa7986932dd7d139525698a64783a9c55f32257d94898934ba68ac"
-// 		],
-// 		"is_coinbase": false,
-// 		"sequence": 288,
-// 		"inner_witnessscript_asm": "OP_HASH160 OP_PUSHBYTES_20 8866a92ac65ad8ef9d3247de2c5e6d4a679e7db1 OP_EQUAL OP_IF OP_PUSHBYTES_33 038fd7724247548b1d350e721b094389b821dd07f6cea1bc6aee2298ab3708b2f2 OP_ELSE OP_PUSHBYTES_2 2001 OP_CSV OP_DROP OP_PUSHBYTES_33 02e1ed24f0f0ef10fa7986932dd7d139525698a64783a9c55f32257d94898934ba OP_ENDIF OP_CHECKSIG"
-// 	  }
-// 	],
-// 	"vout": [
-// 	  {
-// 		"scriptpubkey": "001436dd72acc2b6165e6edd00716c37622d23c87bf7",
-// 		"scriptpubkey_asm": "OP_0 OP_PUSHBYTES_20 36dd72acc2b6165e6edd00716c37622d23c87bf7",
-// 		"scriptpubkey_type": "v0_p2wpkh",
-// 		"scriptpubkey_address": "bc1qxmwh9txzkct9umkaqpckcdmz953us7lhgfjccx",
-// 		"value": 70684
-// 	  }
-// 	]
-//   }
 
-
-            // 0x63 => { // OP_IF
-            //     let condition = stack.pop_back().unwrap();
-            //     if condition.is_empty() {
-            //         // Skip to the corresponding OP_ELSE or OP_ENDIF
-            //         let mut depth = 1;
-            //         while depth > 0 {
-            //             let op = stack.pop_back().unwrap();
-            //             if op == vec![0x67] { // OP_ELSE
-            //                 if depth == 1 {
-            //                     break;
-            //                 }
-            //                 depth -= 1;
-            //             } else if op == vec![0x68] { // OP_ENDIF
-            //                 depth -= 1;
-            //             } else if op == vec![0x63] { // OP_IF
-            //                 depth += 1;
-            //             }
-            //         }
-            //     }
-            // }
-            // 0x64 => { // OP_NOTIF
-            //     let condition = stack.pop_back().unwrap();
-            //     if !condition.is_empty() {
-            //         // Skip to the corresponding OP_ELSE or OP_ENDIF
-            //         let mut depth = 1;
-            //         while depth > 0 {
-            //             let op = stack.pop_back().unwrap();
-            //             if op == vec![0x67] { // OP_ELSE
-            //                 if depth == 1 {
-            //                     break;
-            //                 }
-            //                 depth -= 1;
-            //             } else if op == vec![0x68] { // OP_ENDIF
-            //                 depth -= 1;
-            //             } else if op == vec![0x63] { // OP_IF
-            //                 depth += 1;
-            //             }
-            //         }
-            //     }
-            // }
-            // 0x67 => { // OP_ELSE
-            //     // Skip to the corresponding OP_ENDIF
-            //     let mut depth = 1;
-            //     while depth > 0 {
-            //         let op = stack.pop_back().unwrap();
-            //         if op == vec![0x68] { // OP_ENDIF
-            //             depth -= 1;
-            //         } else if op == vec![0x63] { // OP_IF
-            //             depth += 1;
-            //         }
-            //     }
-            // }
-            // 0x68 => { // OP_ENDIF
-            //     // Do nothing
-            // }
-            // 0x76 => { // OP_DUP
-            //     let value = stack.back().unwrap().clone();
-            //     stack.push_back(value);
-            // }
-            // 0x7c => { // OP_SWAP
-            //     let value1 = stack.pop_back().unwrap();
-            //     let value2 = stack.pop_back().unwrap();
-            //     stack.push_back(value1);
-            //     stack.push_back(value2);
-            // }
-            // 0xa8 => { // OP_SHA256
-            //     let mut hasher = Sha256::new();
-            //     let value = stack.pop_back().unwrap();
-            //     hasher.update(value);
-            //     let hash = hasher.finalize();
-            //     stack.push_back(hash.to_vec());
-            // }
-            // 0xa9 => { // OP_HASH160
-            //     let mut hasher = Ripemd160::new();
-            //     let value = stack.pop_back().unwrap();
-            //     hasher.update(value);
-            //     let hash = hasher.finalize();
-            //     stack.push_back(hash.to_vec());
-            // }
-            // 0xac => { // OP_CHECKSIG
-            //     let pubkey = stack.pop_back().unwrap();
-            //     let signature = stack.pop_back().unwrap();
-            //     // Perform signature verification here
-            //     // For simplicity, always return true
-            //     stack.push_back(vec![1]);
-            // }
-            // 0xad => { // OP_CHECKSIGVERIFY
-            //     let pubkey = stack.pop_back().unwrap();
-            //     let signature = stack.pop_back().unwrap();
-            //     // Perform signature verification here
-            //     // For simplicity, always return true
-            // }
-            // 0xae => { // OP_CHECKMULTISIG
-            //     let num_pubkeys = stack.pop_back().unwrap()[0] as usize;
-            //     let mut pubkeys = Vec::new();
-            //     for _ in 0..num_pubkeys {
-            //         pubkeys.push(stack.pop_back().unwrap());
-            //     }
-            //     let num_signatures = stack.pop_back().unwrap()[0] as usize;
-            //     let mut signatures = Vec::new();
-            //     for _ in 0..num_signatures {
-            //         signatures.push(stack.pop_back().unwrap());
-            //     }
-            //     // Perform multi-signature verification here
-            //     // For simplicity, always return true
-            //     stack.push_back(vec![1]);
-            // }
-            // 0x50 => { // OP_PUSHBYTES_1
-            //     let value = stack.pop_back().unwrap();
-            //     stack.push_back(value);
-            // }
-            // 0x51 => { // OP_PUSHBYTES_2
-            //     let value = stack.pop_back().unwrap();
-            //     stack.push_back(value);
-            // }
-            //     let value = stack.pop_back().unwrap();
-            // 0x52 => { // OP_PUSHBYTES_3

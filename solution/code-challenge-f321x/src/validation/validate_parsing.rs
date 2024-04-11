@@ -3,15 +3,19 @@ use sha2::{Sha256, Digest};
 use std::path::Path;
 use super::utils::*;
 
-fn triple_hash(preimage: &[u8]) -> String {
+fn get_txid(preimage: &[u8]) -> Vec<u8> {
     let mut hasher = Sha256::new();
 	let result = double_hash(preimage);
-    let txid: Vec<u8> = result.iter().rev().cloned().collect();
-    hasher.update(&txid);
+    result.iter().rev().cloned().collect()
+}
+
+fn hash_txid(txid: Vec<u8>) -> String {
+	let mut hasher = Sha256::new();
+	hasher.update(&txid);
     format!("{:x}", hasher.finalize())
 }
 
-fn serialize_input(input: &TxIn) -> Vec<u8> {
+pub fn serialize_input(input: &TxIn) -> Vec<u8> {
 	let mut serialized_input = get_outpoint(input);
 	let scriptsig_len = match &input.scriptsig {
 		Some(s) => hex::decode(s).expect("Hex decode ss len failed").len(),
@@ -70,10 +74,12 @@ fn	assemble_txid_preimage(tx: &Transaction) -> Vec<u8> {
 	preimage
 }
 
-pub fn validate_txid_hash_filename(tx: &Transaction) -> bool {
+pub fn validate_txid_hash_filename(tx: &mut Transaction) -> bool {
 	let tx_preimage = assemble_txid_preimage(tx);
-	let triple_hashed = triple_hash(&tx_preimage);
+	let txid_bytes = get_txid(&tx_preimage);
 
+	tx.txid_hex = hex::encode(&txid_bytes);
+	let triple_hashed = hash_txid(txid_bytes);
     if let Some(json_path) = tx.json_path.as_ref() {
         let path = Path::new(json_path);
         if let Some(filename) = path.file_stem() {

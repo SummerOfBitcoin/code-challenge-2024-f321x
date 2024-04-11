@@ -1,43 +1,38 @@
 pub mod parsing;
 pub mod validation;
+pub mod mining;
 
-use parsing::{parse_transactions_from_dir, transaction_structs::Transaction};
+use parsing::{parse_transactions_from_dir, transaction_structs::{Transaction, TxIn}};
 use validation::ValidationResult;
+use crate::validation::utils::{get_outpoint, varint, InputType};
 // use std::collections::HashSet;
 
-// pub fn count_opcodes(tx: &Transaction) -> Vec<String> {
-//   let mut opcodes = Vec::new();
-//   for txin in &tx.vin {
-//     if let Some(inner_witnessscript_asm) = &txin.inner_witnessscript_asm {
-//       let v: Vec<String> = inner_witnessscript_asm.split(' ').map(|s| s.to_string()).collect();
-//       for opcode in v {
-//         if opcode.starts_with("OP_") {
-//             opcodes.push(opcode.clone());
-//         }
-//       }
-//     }
-//   }
-//   opcodes
-// }
-
 fn main() {
-    let parsed_transactions = parse_transactions_from_dir("/workspaces/code-challenge-2024-f321x/testfiles/p2pkh");
+    let mut parsed_transactions = parse_transactions_from_dir("/workspaces/code-challenge-2024-f321x/mempool");
 
     let mut tx_count = 0;
     // let mut opcodes = Vec::new();
-    for tx in &parsed_transactions {
+    for tx in &mut parsed_transactions {
       // let set: HashSet<String> = opcodes.into_iter().chain(count_opcodes(tx).into_iter()).collect();
       // opcodes = set.into_iter().collect();
-      println!("EVALUATING: {}", &tx.json_path.as_ref().unwrap());
+      // println!("EVALUATING: {}", &tx.json_path.as_ref().unwrap());
+      // for txin in &tx.vin {
+      //   if txin.in_type == InputType::P2SH {
+      //     if txin.witness == None {
+      //     std::process::exit(0);
+      //     }
+      //   }
+      // }
       match tx.validate() {
         ValidationResult::Valid => {
-          println!("VALID");
+          tx_count += 1;
+          // println!("VALID");
         },
         ValidationResult::Invalid(msg) => {
-          panic!("Transaction {:#?} invalid. Reason {}\n", tx.json_path, msg);
+          // println!("Transaction {:#?} invalid. Reason {}\n", tx.json_path, msg);
+          ()
         }
       }
-      tx_count += 1;
 	}
   // println!("{:#?}", opcodes);
   println!("\nDone. Number of parsed transactions: {}\n", tx_count);

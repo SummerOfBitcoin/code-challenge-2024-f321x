@@ -45,7 +45,7 @@ pub fn get_outpoint(input: &TxIn) -> Vec<u8> {
 }
 
 pub fn hash_sha256(preimage: &[u8]) -> Vec<u8> {
-	let mut digest = preimage.to_owned();
+	let digest = preimage.to_owned();
 	let mut hasher = Sha256::new();
 
     hasher.update(&digest);
