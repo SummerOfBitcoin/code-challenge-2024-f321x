@@ -445,7 +445,7 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
     }
     if let Some(last) = stack.pop_back() {
         if last.is_empty() {
-            return Err("SCRIPT INVALID".into());//, &tx.json_path.as_ref().unwrap()).into());
+            return Err("SCRIPT INVALID".into());//, &tx.meta.json_path.as_ref().unwrap()).into());
         };
     }
     Ok(())

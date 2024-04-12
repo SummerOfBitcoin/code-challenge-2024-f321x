@@ -43,15 +43,19 @@ pub struct TxIn {
     pub sequence: 			        u32,
 }
 
+#[derive(Default, Debug)]
+pub struct TxMetadata {
+    pub json_path:      Option<String>,
+    pub txid_hex:       String,
+    pub weight:         u32,
+    pub fee:            u64,
+    pub parents:        Option<Vec<String>>,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct Transaction {
-    pub json_path:      Option<String>,
     #[serde(skip_deserializing)]
-    pub txid_hex:       String,
-    #[serde(skip_deserializing)]
-    pub weight:         u32,
-    #[serde(skip_deserializing)]
-    pub fee:            u64,
+    pub meta:           TxMetadata,
     pub version:        i32,
     pub locktime:       u32,
     pub vin:            Vec<TxIn>,

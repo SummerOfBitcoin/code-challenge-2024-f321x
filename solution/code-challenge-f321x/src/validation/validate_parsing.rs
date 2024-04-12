@@ -78,9 +78,9 @@ pub fn validate_txid_hash_filename(tx: &mut Transaction) -> bool {
 	let tx_preimage = assemble_txid_preimage(tx);
 	let txid_bytes = get_txid(&tx_preimage);
 
-	tx.txid_hex = hex::encode(&txid_bytes);
+	tx.meta.txid_hex = hex::encode(&txid_bytes);
 	let triple_hashed = hash_txid(txid_bytes);
-    if let Some(json_path) = tx.json_path.as_ref() {
+    if let Some(json_path) = tx.meta.json_path.as_ref() {
         let path = Path::new(json_path);
         if let Some(filename) = path.file_stem() {
             if let Some(filename_str) = filename.to_str() {

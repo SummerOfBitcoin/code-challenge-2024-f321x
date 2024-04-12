@@ -15,7 +15,7 @@ fn main() {
     for tx in &mut parsed_transactions {
       // let set: HashSet<String> = opcodes.into_iter().chain(count_opcodes(tx).into_iter()).collect();
       // opcodes = set.into_iter().collect();
-      // println!("EVALUATING: {}", &tx.json_path.as_ref().unwrap());
+      // println!("EVALUATING: {}", &tx.meta.json_path.as_ref().unwrap());
       // for txin in &tx.vin {
       //   if txin.in_type == InputType::P2SH {
       //     if txin.witness == None {
@@ -29,7 +29,7 @@ fn main() {
           // println!("VALID");
         },
         ValidationResult::Invalid(msg) => {
-          // println!("Transaction {:#?} invalid. Reason {}\n", tx.json_path, msg);
+          // println!("Transaction {:#?} invalid. Reason {}\n", tx.meta.json_path, msg);
           ()
         }
       }

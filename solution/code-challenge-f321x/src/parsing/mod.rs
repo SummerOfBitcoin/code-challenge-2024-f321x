@@ -27,7 +27,7 @@ fn parse_file_content(file_to_load: fs::DirEntry) -> Option<Transaction> {
 
 	match parse_json(&file_content) {
 		Some(mut tx) => {
-			tx.json_path = Some(file_path_buf.as_path()
+			tx.meta.json_path = Some(file_path_buf.as_path()
 										.to_str()
 										.expect("Path to string conversion failed!")
 										.to_string());

@@ -39,7 +39,8 @@ fn signature_verification(tx: &Transaction) -> ValidationResult {
 		let result = match tx_type {
 			InputType::P2WPKH => verify_p2wpkh(tx, txin),
 			InputType::P2PKH => verify_p2pkh(tx, txin),
-			InputType::P2SH => verify_p2sh(tx, txin),
+
+			// InputType::P2SH => verify_p2sh(tx, txin),  // fix checkmultisig validation
 
 			// InputType::P2WSH => verify_p2wsh(tx, txin),
 			// InputType::P2SH => ValidationResult::Valid, // todo
