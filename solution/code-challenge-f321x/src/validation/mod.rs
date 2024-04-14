@@ -6,10 +6,10 @@ mod script;
 pub mod weight_calculation;
 
 use crate::parsing::transaction_structs::Transaction;
-use self::validate_values::{validate_values_and_set_fee, validate_and_set_feerate};
+use self::validate_values::{validate_values_and_set_fee, validate_feerate};
 use self::validate_parsing::validate_txid_hash_filename;
 use self::utils::InputType;
-use self::signature_verification::{verify_p2wpkh, verify_p2pkh, verify_p2sh};
+use self::signature_verification::{verify_p2wpkh, verify_p2pkh}; //, verify_p2sh};
 use self::weight_calculation::validate_and_set_weight;
 
 pub enum ValidationResult {
@@ -27,7 +27,7 @@ fn sanity_checks(tx: &mut Transaction) -> ValidationResult {
 	if !validate_and_set_weight(tx) {
 		return ValidationResult::Invalid("Transaction weight too high!".to_string());
 	}
-	if !validate_and_set_feerate(tx) {
+	if !validate_feerate(tx) {
 		return ValidationResult::Invalid("too low feerate".to_string());
 	}
 	ValidationResult::Valid

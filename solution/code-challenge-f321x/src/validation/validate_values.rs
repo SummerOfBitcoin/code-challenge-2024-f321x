@@ -23,7 +23,7 @@ pub fn validate_values_and_set_fee(tx: &mut Transaction) -> bool {
 	true
 }
 
-pub fn validate_and_set_feerate(tx: &Transaction) -> bool {
+pub fn validate_feerate(tx: &Transaction) -> bool {
 	let vbyte_size = tx.meta.weight / 4;
 	let feerate = tx.meta.fee as u64 / vbyte_size as u64;
 	if feerate < 1 {

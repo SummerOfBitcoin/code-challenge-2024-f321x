@@ -1,32 +1,40 @@
 use std::collections::HashMap;
 use crate::parsing::transaction_structs::Transaction;
 
-// def add_parent_weight(mempool, child):
-//     parent_weight = 0
-//     if not mempool[child]["parents"]:
-//         return mempool[child]["weight"]
-//     for parent in mempool[child]["parents"]:
-//         parent_weight += add_parent_weight(mempool, parent)
-//     return parent_weight
+struct fee_and_weight {
+    fee:    u64,
+    weight: u64,
+}
 
+fn calc_parents(transactions:& HashMap<String, Transaction>, child_txid: &String) -> fee_and_weight {
+    let mut fee_and_weight: fee_and_weight;
 
-// def add_parent_fee(mempool, child):
-//     parent_fee = 0
-//     if not mempool[child]["parents"]:
-//         return mempool[child]["fee"]
-//     for parent in mempool[child]["parents"]:
-//         parent_fee += add_parent_fee(mempool, parent)
-//     return parent_fee
+    if let Some(child_transaction) = transactions.get(child_txid) {
+        fee_and_weight = fee_and_weight {
+            fee: child_transaction.meta.fee,
+            weight: child_transaction.meta.weight,
+        };
 
+        if let Some(parents_txids) = child_transaction.meta.parents.as_ref() {
+            for parent in parents_txids {
+                let temp_result = calc_parents(transactions, parent);
+                fee_and_weight.fee += temp_result.fee;
+                fee_and_weight.weight += temp_result.weight;
+            };
+        } else { return fee_and_weight };
+    } else { panic!("calc_parent_fees tx not found?"); };
 
-// def calculate_packet_values(mempool):
-//     for tx in mempool:
-//         if mempool[tx]["parents"] is not None:
-//            mempool[tx]["packet_weight"] += add_parent_weight(mempool, tx)
-//            mempool[tx]["packet_fee"] += add_parent_fee(mempool, tx)
-//            mempool[tx]["packet_feerate"] = mempool[tx]["packet_fee"] / mempool[tx]["packet_weight"]
-
+    fee_and_weight
+}
 
 pub fn calculate_packet_weights(transactions: &mut HashMap<String, Transaction>) -> () {
-
+    let transactions_original_clone = transactions.clone();
+    
+    for (txid, tx) in transactions.iter_mut() {
+        let temp_result = calc_parents(&transactions_original_clone, txid);
+        tx.meta.packet_data.packet_fee_sat = temp_result.fee;
+        tx.meta.packet_data.packet_weight = temp_result.weight;
+        
+        tx.meta.packet_data.packet_feerate_weight = temp_result.fee / temp_result.weight;
+    };
 }

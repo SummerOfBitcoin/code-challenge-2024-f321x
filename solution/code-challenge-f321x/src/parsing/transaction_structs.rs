@@ -5,7 +5,7 @@ use serde_with::{serde_as, NoneAsEmptyString};
 use crate::validation::utils::{get_outpoint, varint, InputType};
 
 #[serde_as]
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct TxOut {
     #[serde_as(as = "NoneAsEmptyString")]
     pub	scriptpubkey:			Option<String>,
@@ -15,7 +15,7 @@ pub struct TxOut {
 	pub	value:					u64,
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Script {
 	pub	scriptpubkey:			String,
 	pub	scriptpubkey_asm:		String,
@@ -25,7 +25,7 @@ pub struct Script {
 }
 
 #[serde_as]
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct TxIn {
     #[serde(skip_deserializing)]
     pub in_type:                    InputType,
@@ -43,16 +43,24 @@ pub struct TxIn {
     pub sequence: 			        u32,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
+pub struct Packet {
+    pub packet_weight:          u64,
+    pub packet_fee_sat:         u64,
+    pub packet_feerate_weight:  u64, // sat/weight_unit 
+}
+
+#[derive(Default, Debug, Clone)]
 pub struct TxMetadata {
     pub json_path:      Option<String>,
     pub txid_hex:       String,
-    pub weight:         u32,
+    pub packet_data:    Packet,  
+    pub weight:         u64,
     pub fee:            u64,
     pub parents:        Option<Vec<String>>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Transaction {
     #[serde(skip_deserializing)]
     pub meta:           TxMetadata,
@@ -93,6 +101,9 @@ impl Transaction {
         all_outputs
     }
 }
+
+
+// Sample Transaction:
 
 // # {
 //     #   "version": 1,

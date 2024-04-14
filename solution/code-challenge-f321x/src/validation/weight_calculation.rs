@@ -69,6 +69,6 @@ pub fn validate_and_set_weight(tx: &mut Transaction) -> bool {
 	if weight > (4000000 - (1100 + 320)) {  // leave some space for header and coinbase tx
 		return false;
 	};
-	tx.meta.weight = weight;
+	tx.meta.weight = weight as u64;
 	true
 }

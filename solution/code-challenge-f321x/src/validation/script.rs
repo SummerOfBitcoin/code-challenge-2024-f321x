@@ -1,4 +1,4 @@
-use core::{num, panic};
+use core::panic;
 use std::collections::VecDeque;
 use std::error::Error;
 use hex_literal::hex as hexlit;

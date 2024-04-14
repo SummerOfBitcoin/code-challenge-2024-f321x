@@ -3,7 +3,7 @@ use ripemd::Ripemd160;
 use crate::parsing::transaction_structs::TxIn;
 use num_traits::ToPrimitive;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum InputType {
 	P2TR,
 	P2PKH,

@@ -4,7 +4,6 @@ use std::path::Path;
 use super::utils::*;
 
 fn get_txid(preimage: &[u8]) -> Vec<u8> {
-    let mut hasher = Sha256::new();
 	let result = double_hash(preimage);
     result.iter().rev().cloned().collect()
 }
