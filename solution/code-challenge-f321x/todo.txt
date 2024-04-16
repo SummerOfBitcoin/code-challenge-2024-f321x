@@ -1,2 +1,4 @@
 P2WPKH -> sighash types -> parse used types and implement
 script proper error handling
+
+sigop counting

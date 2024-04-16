@@ -47,14 +47,15 @@ pub struct TxIn {
 pub struct Packet {
     pub packet_weight:          u64,
     pub packet_fee_sat:         u64,
-    pub packet_feerate_weight:  u64, // sat/weight_unit 
+    pub packet_feerate_weight:  u64, // sat/weight_unit
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct TxMetadata {
     pub json_path:      Option<String>,
     pub txid_hex:       String,
-    pub packet_data:    Packet,  
+    pub wtxid_hex:      String,
+    pub packet_data:    Packet,
     pub weight:         u64,
     pub fee:            u64,
     pub parents:        Option<Vec<String>>,

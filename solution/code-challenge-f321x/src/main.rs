@@ -28,7 +28,7 @@ use mining::mine_block;
 
 fn validate_transactions(parsed_transactions: &mut Vec<Transaction>) -> HashSet<String> {
   let mut invalid_transactions: HashSet<String> = HashSet::new();
-  
+
   for tx in parsed_transactions {
     match tx.validate() {
       ValidationResult::Valid => {
@@ -43,7 +43,7 @@ fn validate_transactions(parsed_transactions: &mut Vec<Transaction>) -> HashSet<
 }
 
 fn main() {
-  let mut parsed_transactions = parse_transactions_from_dir("/home/benutzer/code/bitcoin/code-challenge-2024-f321x/mempool");
+  let mut parsed_transactions = parse_transactions_from_dir("/workspaces/code-challenge-2024-f321x/mempool");
   let invalid_transactions = validate_transactions(&mut parsed_transactions);
   let mut valid_transactions = remove_invalid_transactions(parsed_transactions, invalid_transactions);
   mine_block(&mut valid_transactions);

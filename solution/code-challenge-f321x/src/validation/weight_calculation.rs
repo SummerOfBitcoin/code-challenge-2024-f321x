@@ -11,7 +11,7 @@ use crate::validation::utils::varint;
 // witness	x1
 // locktime	x4
 
-fn is_segwit(tx: &Transaction) -> bool {
+pub fn is_segwit(tx: &Transaction) -> bool {
 	for txin in &tx.vin {
 		if let Some(_) = txin.witness {
 			return true;
@@ -24,7 +24,7 @@ fn input_weight_sum(tx: &Transaction) -> u32 {
 	let mut input_weight_sum: u32 = 0;
 	input_weight_sum += varint(tx.vin.len() as u128).len() as u32;
 	for txin in &tx.vin {
-		input_weight_sum = serialize_input(txin).len() as u32;
+		input_weight_sum += serialize_input(txin).len() as u32;
 	};
 	input_weight_sum
 }
@@ -33,7 +33,7 @@ fn output_weight_sum(tx: &Transaction) -> u32 {
 	let mut output_weight_sum: u32 = 0;
 	output_weight_sum += varint(tx.vout.len() as u128).len() as u32;
 	for txout in &tx.vout {
-		output_weight_sum = serialize_output(txout).len() as u32;
+		output_weight_sum += serialize_output(txout).len() as u32;
 	};
 	output_weight_sum
 }

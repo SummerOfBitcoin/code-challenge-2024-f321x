@@ -12,6 +12,7 @@
 		"equalverify",
 		"Equalverify",
 		"EQUALVERIFY",
+		"feerate",
 		"fromhex",
 		"greaterthan",
 		"GREATERTHAN",

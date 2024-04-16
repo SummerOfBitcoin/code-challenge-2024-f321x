@@ -1,4 +1,4 @@
-mod validate_values;
+pub mod validate_values;
 pub mod validate_parsing;
 pub mod utils;
 mod signature_verification;
@@ -45,7 +45,7 @@ fn signature_verification(tx: &Transaction) -> ValidationResult {
 			// InputType::P2WSH => verify_p2wsh(tx, txin),
 			// InputType::P2SH => ValidationResult::Valid, // todo
 			_ => {
-				println!("Weird type: {:#?}", tx_type);
+				// println!("Weird type: {:#?}", tx_type);
 				ValidationResult::Invalid("Input type not implemented!".to_string())
 			},
 		};
