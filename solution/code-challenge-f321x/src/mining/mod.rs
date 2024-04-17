@@ -1,12 +1,14 @@
 mod assign_parents;
 mod packet_weight;
 mod transaction_sorting;
+mod construct_coinbase;
 
 use std::collections::HashMap;
 use crate::parsing::transaction_structs::Transaction;
 use self::{	assign_parents::assign_mempool_parents,
 			packet_weight::calculate_packet_weights,
-			transaction_sorting::sort_transactions};
+			transaction_sorting::sort_transactions,
+			construct_coinbase::assemble_coinbase_transaction };
 
 
 
@@ -19,6 +21,11 @@ pub fn mine_block(txid_tx_map: &mut HashMap<String, Transaction>) -> () {
 
 
 	let block_order: Vec<Transaction> = sort_transactions(txid_tx_map);
+	let coinbase_tx: Transaction = construct_coinbase();
+
+	// for tx in block_order {
+	// 	println!("TXID: {} | wTXID: {} \n", &tx.meta.txid_hex, &tx.meta.wtxid_hex);
+	// }
 
 
 
