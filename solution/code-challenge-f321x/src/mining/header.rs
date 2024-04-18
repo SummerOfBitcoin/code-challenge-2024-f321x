@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use num_bigint::BigUint;
 
 fn mine_nonce(block_header: &[u8]) -> u32 {
-	let target = BigUint::from_bytes_be(&hexlit!("0000ffff00000000000000000000000000000000000000000000000000000000"));
+	let target = BigUint::from_bytes_be(&hexlit!("00000ffff0000000000000000000000000000000000000000000000000000000"));
     let max_nonce = std::u32::MAX;
 	let mut candidate = block_header.to_vec();
 	candidate.extend(0_u32.to_le_bytes());
