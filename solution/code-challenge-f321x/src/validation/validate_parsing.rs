@@ -5,7 +5,7 @@ use super::utils::*;
 use hex_literal::hex as hexlit;
 use super::weight_calculation::is_segwit;
 
-fn get_txid(preimage: &[u8]) -> Vec<u8> {
+pub fn get_txid(preimage: &[u8]) -> Vec<u8> {
 	let result = double_hash(preimage);
     result.iter().rev().cloned().collect()
 }

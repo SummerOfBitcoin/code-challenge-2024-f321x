@@ -53,7 +53,7 @@ pub fn hash_sha256(preimage: &[u8]) -> Vec<u8> {
 }
 
 pub fn double_hash(preimage: &[u8]) -> Vec<u8> {
-	let mut digest = preimage.to_owned();
+	let mut digest: Vec<u8> = preimage.to_owned();
 
     for _ in 0..2 {
 		digest = hash_sha256(&digest);

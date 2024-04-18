@@ -43,7 +43,7 @@ fn validate_transactions(parsed_transactions: &mut Vec<Transaction>) -> HashSet<
 }
 
 fn main() {
-  let mut parsed_transactions = parse_transactions_from_dir("/Users/fbock/code/code-challenge-2024-f321x/mempool");
+  let mut parsed_transactions = parse_transactions_from_dir("/Users/fbock/code/code-challenge-2024-f321x/testfiles/p2pkh");
   let invalid_transactions = validate_transactions(&mut parsed_transactions);
   let mut valid_transactions = remove_invalid_transactions(parsed_transactions, invalid_transactions);
   mine_block(&mut valid_transactions);

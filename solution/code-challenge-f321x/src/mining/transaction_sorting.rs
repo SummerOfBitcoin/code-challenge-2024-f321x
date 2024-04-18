@@ -58,6 +58,32 @@ pub fn sort_transactions(txid_tx_map: &HashMap<String, Transaction>) -> Vec<Tran
 	sorted_transactions
 }
 
+fn sigops_amount(tx: &Transaction) -> i32 {
+    let mut sigops = 0;
+
+    // implement later if sigops cause problems
+    sigops
+}
+
+pub fn cut_size(sorted_transactions: Vec<Transaction>) -> Vec<Transaction> {
+    let mut block: Vec<Transaction> = Vec::new();
+    let mut free_block_space:i64 = 3998480 ; // 4 000 000 - 320 (header) - 1200 (coinbase reserve)
+    let mut sigops_left:i32 = 80000;
+
+    for tx in sorted_transactions {
+        let sigops = sigops_amount(&tx);
+
+        if free_block_space > tx.meta.weight as i64 && sigops_left > sigops {
+            free_block_space -= tx.meta.weight as i64;
+            sigops_left -= sigops;
+            block.push(tx);
+        } else {
+            break;
+        };
+    }
+    block
+}
+
 // pub fn validate_sorting(sorted_transactions: &Vec<Transaction>) -> () {
 //     let mut index = 0;
 
