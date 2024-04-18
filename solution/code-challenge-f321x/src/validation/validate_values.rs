@@ -4,7 +4,7 @@ pub fn validate_values_and_set_fee(tx: &mut Transaction) -> bool {
 	let mut input_sum = 0;
 	let mut output_sum = 0;
 
-	if tx.vin.len() == 0 || tx.vout.len() == 0 {  // no in or outputs
+	if tx.vin.is_empty() || tx.vout.is_empty() {  // no in or outputs
 		return false;
 	}
 	for txin in &tx.vin {
@@ -24,10 +24,10 @@ pub fn validate_values_and_set_fee(tx: &mut Transaction) -> bool {
 }
 
 pub fn validate_feerate(tx: &Transaction) -> bool {
-	let vbyte_size = tx.meta.weight / 4;
-	let feerate = tx.meta.fee as u64 / vbyte_size as u64;
+	let vbyte_size: u64 = tx.meta.weight / 4;
+	let feerate = tx.meta.fee / vbyte_size;
 	if feerate < 1 {
 		return false;
 	}
-	return true;
+	true
 }

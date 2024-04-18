@@ -103,16 +103,15 @@ fn	assemble_txid_preimage(tx: &Transaction, witness: bool) -> Vec<u8> {
 pub fn validate_txid_hash_filename(tx: &mut Transaction) -> bool {
 	let tx_preimage = assemble_txid_preimage(tx, false);
 	let txid_bytes = get_txid(&tx_preimage);
-	let wtxid_bytes: Vec<u8>;
 
-	if is_segwit(tx) {
+	let wtxid_bytes: Vec<u8> = if is_segwit(tx) {
 		let wtx_preimage = assemble_txid_preimage(tx, true);
-		wtxid_bytes = get_txid(&wtx_preimage);
+		get_txid(&wtx_preimage)
 	} else {
-		wtxid_bytes = txid_bytes.clone();
-	}
+		txid_bytes.clone()
+	};
 	tx.meta.txid_hex = hex::encode(&txid_bytes);
-	tx.meta.wtxid_hex = hex::encode(&wtxid_bytes);
+	tx.meta.wtxid_hex = hex::encode(wtxid_bytes);
 	let triple_hashed = hash_txid(txid_bytes);
     if let Some(json_path) = tx.meta.json_path.as_ref() {
         let path = Path::new(json_path);

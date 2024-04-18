@@ -13,7 +13,7 @@ use crate::validation::utils::varint;
 
 pub fn is_segwit(tx: &Transaction) -> bool {
 	for txin in &tx.vin {
-		if let Some(_) = txin.witness {
+		if txin.witness.is_some() {
 			return true;
 		}
 	};

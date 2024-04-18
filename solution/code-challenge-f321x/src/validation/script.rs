@@ -47,7 +47,7 @@ fn op_rot(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
 }
 
 fn op_size(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
-    if stack.len() > 0 {
+    if !stack.is_empty() {
         if let Some(last) = stack.back() {
             let length = last.len();
             let length_bytes = length.to_le_bytes().to_vec();
@@ -96,9 +96,9 @@ fn op_equalverify(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     op_equal(stack)?;
     if let Some(bool) = stack.pop_back() {
         if bool.is_empty() {
-            return Err("Equalverify false");
-        } else { return Ok(()) };
-    } else { return Err("OP_EQUALVERIFY stack pop failed") };
+            Err("Equalverify false")
+        } else { Ok(()) }
+    } else { Err("OP_EQUALVERIFY stack pop failed") }
 }
 
 fn op_ifdup(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
@@ -110,8 +110,8 @@ fn op_ifdup(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
         } else {
             stack.push_back(last_item.clone());
         }
-        return Ok(());
-    } else { return Err("OP_IFDUP getting last element failed") };
+        Ok(())
+    } else { Err("OP_IFDUP getting last element failed") }
 }
 
 // Marks transaction as invalid if the relative lock time of the input (enforced by BIP 0068 with nSequence)
@@ -158,7 +158,7 @@ fn op_checklocktimeverify(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin:
             return Err(format!("OP_CLTV locktime {} < {} stack num.",
                                 tx.locktime, decoded_number));
         }
-        if txin.sequence == 0xffffffff as u32 {
+        if txin.sequence == 0xffffffff {
             return Err("OP_CLTV in sequence is 0xffffffff".to_string());
         }
     } else { return Err("OP_CLTV pop item failed".to_string()) };
@@ -250,22 +250,21 @@ fn op_checksig(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn) -> 
 fn op_verify(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     if let Some(top_stack_element) = stack.pop_back() {
         if top_stack_element.is_empty() {
-            return Err("OP_VERIFY not valid")
+            Err("OP_VERIFY not valid")
         } else {
-            return Ok(());
+            Ok(())
         }
-    } else { return Err("OP_VERIFY popping top stack element failed") };
+    } else { Err("OP_VERIFY popping top stack element failed") }
 }
 
 fn op_pushnum(stack: &mut VecDeque<Vec<u8>>, amount: u8) -> Result<(), &'static str> {
     let number:u8 = amount - 80;
-    let mut number_bytes: Vec<u8> = Vec::new();
-    number_bytes.push(number);
+    let number_bytes: Vec<u8> = vec![number];
     stack.push_back(number_bytes);
     Ok(())
 }
 
-fn op_pushbytes(stack: &mut VecDeque<Vec<u8>>, index: &mut usize, script: &Vec<u8>) -> Result<(), &'static str> {
+fn op_pushbytes(stack: &mut VecDeque<Vec<u8>>, index: &mut usize, script: &[u8]) -> Result<(), &'static str> {
     let opcode: u8 = script[*index];
     let mut bytes: Vec<u8> = Vec::new();
 
@@ -280,20 +279,19 @@ fn op_pushbytes(stack: &mut VecDeque<Vec<u8>>, index: &mut usize, script: &Vec<u
     Ok(())
 }
 
-pub fn get_pushdata_amount(script: &Vec<u8>, amount_bytes: u8, current_index: usize) -> Result<u32, &'static str> {
-    let mut amount_of_bytes_to_push: Vec<u8> = Vec::new();
+pub fn get_pushdata_amount(script: &[u8], amount_bytes: u8, current_index: usize) -> Result<u32, &'static str> {
+    let mut amount_of_bytes_to_push: Vec<u8> = vec![0; amount_bytes as usize];
 
-    amount_of_bytes_to_push.resize(amount_bytes as usize, 0);
     amount_of_bytes_to_push.clone_from_slice(&script[current_index + 1 ..current_index + 1 + amount_bytes as usize]);
     match amount_bytes {
         1 => Ok(amount_of_bytes_to_push[0] as u32),
         2 => Ok(LittleEndian::read_u16(&amount_of_bytes_to_push) as u32),
         4 => Ok(LittleEndian::read_u32(&amount_of_bytes_to_push)),
-        _ => return Err("get_pushdata_amount weird amount in match"),
+        _ => Err("get_pushdata_amount weird amount in match"),
     }
 }
 
-fn op_pushdata(stack: &mut VecDeque<Vec<u8>>, amount_bytes: u8, index: &mut usize, script: &Vec<u8>) -> Result<(), &'static str> {
+fn op_pushdata(stack: &mut VecDeque<Vec<u8>>, amount_bytes: u8, index: &mut usize, script: &[u8]) -> Result<(), &'static str> {
     let mut data_push: Vec<u8> = Vec::new();
 
     let amount_of_bytes_to_push = get_pushdata_amount(script, amount_bytes, *index)?;

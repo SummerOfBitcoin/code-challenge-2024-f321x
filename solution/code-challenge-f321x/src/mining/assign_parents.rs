@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use crate::parsing::transaction_structs::Transaction;
-use std::mem;
 
-pub fn assign_mempool_parents(transactions: &mut HashMap<String, Transaction>) -> () {
+pub fn assign_mempool_parents(transactions: &mut HashMap<String, Transaction>) {
 	let mut parent_transactions: HashMap<String, Vec<String>> = HashMap::new();
 
 	for (txid, tx) in transactions.iter() {
@@ -20,7 +19,7 @@ pub fn assign_mempool_parents(transactions: &mut HashMap<String, Transaction>) -
 
 	for (txid, parents) in parent_transactions.iter_mut() {
         if let Some(transaction) = transactions.get_mut(txid) {
-            transaction.meta.parents = Some(mem::replace(parents, Vec::new()));
+            transaction.meta.parents = Some(std::mem::take(parents));
         }
     };
 }

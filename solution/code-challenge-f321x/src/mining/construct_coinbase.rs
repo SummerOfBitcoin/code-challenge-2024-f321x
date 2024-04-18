@@ -9,8 +9,8 @@ pub struct CoinbaseTxData {
     pub assembled_tx:           Vec<u8>,
 }
 
-pub fn get_merkle_root(block_txs: &Vec<Vec<u8>>) -> Vec<u8> {
-    let mut merkle_tree: Vec<Vec<u8>> = block_txs.clone();
+pub fn get_merkle_root(block_txs: &[Vec<u8>]) -> Vec<u8> {
+    let mut merkle_tree: Vec<Vec<u8>> = block_txs.to_owned();
 
     if merkle_tree.len() == 1 {
         return merkle_tree[0].clone();

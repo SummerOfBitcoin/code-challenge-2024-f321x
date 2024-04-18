@@ -15,14 +15,14 @@ fn get_parent_index(transactions: &Vec<Transaction>, txid: &String) -> usize {
     parent_index
 }
 
-fn push_parent_in_front(transactions: &mut Vec<Transaction>, parent_index: usize, child_index: usize) -> () {
+fn push_parent_in_front(transactions: &mut Vec<Transaction>, parent_index: usize, child_index: usize) {
     if parent_index < transactions.len() && child_index < transactions.len() {
         let parent = transactions.remove(parent_index);
         transactions.insert(child_index, parent);
     }
 }
 
-fn put_parents_in_front(presorted: &mut Vec<Transaction>) -> () {
+fn put_parents_in_front(presorted: &mut Vec<Transaction>) {
     let mut nothing_changed: bool = false;
 
     'outer: while !nothing_changed {
@@ -58,11 +58,12 @@ pub fn sort_transactions(txid_tx_map: &HashMap<String, Transaction>) -> Vec<Tran
 	sorted_transactions
 }
 
-fn sigops_amount(tx: &Transaction) -> i32 {
-    let mut sigops = 0;
+fn sigops_amount(_tx: &Transaction) -> i32 {
+    // let mut sigops = 0;
 
     // implement later if sigops cause problems
-    sigops
+    // sigops
+    0
 }
 
 pub fn cut_size(sorted_transactions: Vec<Transaction>) -> Vec<Transaction> {

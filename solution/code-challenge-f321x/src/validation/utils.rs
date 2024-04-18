@@ -20,7 +20,7 @@ impl Default for InputType {
 }
 
 impl InputType {
-	pub fn fetch_type(txin: &mut TxIn) -> () {
+	pub fn fetch_type(txin: &mut TxIn) {
 		let type_string = &txin.prevout.scriptpubkey_type;
 		txin.in_type = match type_string.as_str() {
 			"v1_p2tr" => InputType::P2TR,
@@ -93,7 +93,7 @@ pub fn varint(n: u128) -> Vec<u8> {
 // (so called negative 0). Positive 0 is represented by a null-length vector.
 // Byte vectors are interpreted as Booleans where
 // False is represented by any representation of zero and True is represented by any representation of non-zero.
-pub fn decode_num(number:&Vec<u8>) -> i128 {
+pub fn decode_num(number:&[u8]) -> i128 {
 	let number = num_bigint::BigInt::from_signed_bytes_le(number);
 	number.to_i128().expect("number outside of i128 scope")
 }
