@@ -4,9 +4,10 @@ use super::construct_coinbase::{get_merkle_root, CoinbaseTxData};
 use std::time::{SystemTime, UNIX_EPOCH};
 use num_bigint::BigUint;
 
+
 fn mine_nonce(block_header: &[u8]) -> u32 {
 	let target = BigUint::from_bytes_be(&hexlit!("00000ffff0000000000000000000000000000000000000000000000000000000"));
-    let max_nonce = std::u32::MAX;
+	let max_nonce = std::u32::MAX;
 	let mut candidate = block_header.to_vec();
 	candidate.extend(0_u32.to_le_bytes());
 
@@ -15,7 +16,7 @@ fn mine_nonce(block_header: &[u8]) -> u32 {
 		candidate[len - 4..].copy_from_slice(&u32::to_le_bytes(nonce));
         let block_hash: Vec<u8> = double_hash(&candidate);
 
-		let block_hash_num = BigUint::from_bytes_be(&block_hash);
+		let block_hash_num = BigUint::from_bytes_le(&block_hash);
 
         if block_hash_num < target {
             return nonce;
@@ -51,7 +52,6 @@ pub fn construct_header(block_transactions: &Vec<Transaction>, coinbase_tx: &Coi
 
 	let target_bits = u32::to_le_bytes(0x1f00ffff);  // target
 	block_header.extend(target_bits);
-
 	let nonce: u32 = mine_nonce(&block_header);
 	block_header.extend(nonce.to_le_bytes());
 	block_header
