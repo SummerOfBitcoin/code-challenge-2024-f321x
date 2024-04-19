@@ -32,7 +32,7 @@ pub fn construct_header(block_transactions: &Vec<Transaction>, coinbase_tx: &Coi
 																									.into_iter()
 																									.rev()
 																									.collect();
-	block_header.extend(previous_block_bytes);  // rev bytes of previous block hash
+	block_header.extend(previous_block_bytes);  // rev bytes of previous block hash (natural order)
 
 	let mut txids_bytes: Vec<Vec<u8>> = Vec::new();
 	txids_bytes.push(coinbase_tx.txid_natural_bytes.clone());
@@ -49,7 +49,7 @@ pub fn construct_header(block_transactions: &Vec<Transaction>, coinbase_tx: &Coi
 		block_header.extend(time_sec.to_le_bytes());
 	} else { panic!("Error getting unix time in header construction!") };
 
-	let target_bits = hexlit!("1f00ffff");  // target
+	let target_bits = u32::to_le_bytes(0x1f00ffff);  // target
 	block_header.extend(target_bits);
 
 	let nonce: u32 = mine_nonce(&block_header);
