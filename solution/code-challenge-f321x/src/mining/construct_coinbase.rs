@@ -54,6 +54,7 @@ fn calc_wtxid_commitment_scriptpubkey(block_txs: &Vec<Transaction>) -> Vec<u8> {
     wtxid_merkle_root.extend(hexlit!("0000000000000000000000000000000000000000000000000000000000000000"));
     let witness_commitment = double_hash(&wtxid_merkle_root);
     let mut witness_commitment_scriptpubkey = hexlit!("6a24aa21a9ed").to_vec();  // OP_RETURN + len + witness code
+
     witness_commitment_scriptpubkey.extend(&witness_commitment);
     witness_commitment_scriptpubkey
 }
@@ -69,8 +70,7 @@ fn count_fees(block_txs: &Vec<Transaction>) -> u64 {
 
 fn serialize_coinbase_transaction(block_txs: &Vec<Transaction>, is_segwit: bool) -> Vec<u8> {
     let mut coinbase_transaction: Vec<u8> = Vec::new();
-	let wtxid_commitment_scriptpubkey: Vec<u8> = if is_segwit {
-        calc_wtxid_commitment_scriptpubkey(block_txs) } else { vec![] } ;
+	let wtxid_commitment_scriptpubkey: Vec<u8> = calc_wtxid_commitment_scriptpubkey(block_txs);
     let reward: u64 = count_fees(block_txs) + 625000000;
 
     coinbase_transaction.extend(hexlit!("01000000")); // version
@@ -92,6 +92,9 @@ fn serialize_coinbase_transaction(block_txs: &Vec<Transaction>, is_segwit: bool)
     coinbase_transaction.extend(hexlit!("001435f6de260c9f3bdee47524c473a6016c0c055cb9"));
     coinbase_transaction.extend(hexlit!("0000000000000000")); // witness amount
     coinbase_transaction.extend(varint(wtxid_commitment_scriptpubkey.len() as u128)); // len wtxid commitment
+
+    // println!("Witness commitment scriptpubkey: {}", hex::encode(&wtxid_commitment_scriptpubkey));
+
     coinbase_transaction.extend(wtxid_commitment_scriptpubkey);
     // amnt witness stack items + len witness reserved value + value
     if is_segwit {
