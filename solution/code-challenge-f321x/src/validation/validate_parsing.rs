@@ -54,29 +54,26 @@ pub fn	serialize_output(output: &TxOut) -> Vec<u8> {
 
 fn serialize_witnesses_with_amount(tx: &Transaction) -> Vec<u8> {
 	let mut witnesses: Vec<u8> = Vec::new();
-	let mut witness_amount = 0;
-	let mut witness_data: Vec<u8> = Vec::new();
 
 	for input in &tx.vin {
 		if let Some(witnesses_hex) = input.witness.as_ref() {
+			witnesses.extend(varint(witnesses_hex.len() as u128));
 			for witness_element in witnesses_hex {
-				witness_amount += 1;
 
 				let witness_element_bytes: Vec<u8> = hex::decode(witness_element).expect("decoding witness hex failed");
-				witness_data.extend(varint(witness_element_bytes.len() as u128));
-				witness_data.extend(witness_element_bytes);
+				witnesses.extend(varint(witness_element_bytes.len() as u128));
+				witnesses.extend(witness_element_bytes);
 			};
 		};
 	};
-	witnesses.extend(varint(witness_amount));
-	witnesses.extend(witness_data);
 	witnesses
 }
 
 fn	assemble_txid_preimage(tx: &Transaction, witness: bool) -> Vec<u8> {
 	let mut preimage: Vec<u8> = Vec::new();
-	let version = tx.version.to_le_bytes();
-	let	len_inputs = varint(tx.vin.len() as u128);
+	let version: [u8; 4] = tx.version.to_le_bytes();
+
+	let	len_inputs: Vec<u8> = varint(tx.vin.len() as u128);
 	let mut all_input_bytes: Vec<u8> = Vec::new();
 	for tx_in in &tx.vin {
 		all_input_bytes.append(&mut serialize_input(tx_in));
