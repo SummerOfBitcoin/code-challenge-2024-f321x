@@ -68,7 +68,7 @@ fn sigops_amount(_tx: &Transaction) -> i32 {
 
 pub fn cut_size(sorted_transactions: Vec<Transaction>) -> Vec<Transaction> {
     let mut block: Vec<Transaction> = Vec::new();
-    let mut free_block_space:i64 = 3998480 ; // 4 000 000 - 320 (header) - 1200 (coinbase reserve)
+    let mut free_block_space:i64 = 3000000 ; // 4 000 000 - 320 (header) - 1200 (coinbase reserve)
     let mut sigops_left:i32 = 80000;
 
     for tx in sorted_transactions {
