@@ -5,17 +5,24 @@ use super::utils::*;
 use hex_literal::hex as hexlit;
 use super::weight_calculation::is_segwit;
 
+// returns: reversed double sha256 digest of bytes (Vec<u8>) passed as argument
 pub fn get_txid(preimage: &[u8]) -> Vec<u8> {
 	let result = double_hash(preimage);
     result.iter().rev().cloned().collect()
 }
 
+// Function to hash the txid bytes for comparison against json filenames
+// (third hash of transaction data)
+// returns: Hex encoded String of the hash
 fn hash_txid(txid: Vec<u8>) -> String {
 	let mut hasher = Sha256::new();
 	hasher.update(&txid);
     format!("{:x}", hasher.finalize())
 }
 
+// serialize given &TxIn to a byte-Vec<u8> for later use in assembling the full transaction
+// used for calculation of txid
+// returns: Vec<u8> of the byte serialized &TxIn 
 pub fn serialize_input(input: &TxIn) -> Vec<u8> {
 	let mut serialized_input = get_outpoint(input);
 	let scriptsig_len = match &input.scriptsig {
@@ -34,6 +41,9 @@ pub fn serialize_input(input: &TxIn) -> Vec<u8> {
 	serialized_input
 }
 
+// serialize given &TxOut to a byte-Vec<u8> for later use in assembling the full transaction
+// used for calculation of the txid
+// returns: Vec<u8> of the byte serialized &TxOut 
 pub fn	serialize_output(output: &TxOut) -> Vec<u8> {
 	let mut serialized_output: Vec<u8> = Vec::new();
 	let value = output.value.to_le_bytes();
@@ -52,6 +62,8 @@ pub fn	serialize_output(output: &TxOut) -> Vec<u8> {
 	serialized_output
 }
 
+// byte-serializes all witnesses in the given &Transaction
+// returns: Vec<u8> of the byte representation of all witnesses in the transaction
 fn serialize_witnesses_with_amount(tx: &Transaction) -> Vec<u8> {
 	let mut witnesses: Vec<u8> = Vec::new();
 
@@ -69,6 +81,10 @@ fn serialize_witnesses_with_amount(tx: &Transaction) -> Vec<u8> {
 	witnesses
 }
 
+// assembles/serializes the transaction according to the reference.
+// includes witness, marker and flag if argument witness is true for wtxid calculation
+// if witness argument is false the returned bytes represent the data to hash for the txid
+// returns: Vec<u8> of assembled transaction byte, either for txid or wtxid
 fn	assemble_txid_preimage(tx: &Transaction, witness: bool) -> Vec<u8> {
 	let mut preimage: Vec<u8> = Vec::new();
 	let version: [u8; 4] = tx.version.to_le_bytes();
@@ -97,6 +113,10 @@ fn	assemble_txid_preimage(tx: &Transaction, witness: bool) -> Vec<u8> {
 	preimage
 }
 
+// calculates txid and wtxid of the passed Transaction. Compares hash of txid
+// against json filename to validate correct parsing and re-serialization.
+// stores wtxid and txid in the &mut Transaction for further use.
+// returns: true if triple hash of transaction data (without witness) equals json filename
 pub fn validate_txid_hash_filename(tx: &mut Transaction) -> bool {
 	let tx_preimage = assemble_txid_preimage(tx, false);
 	let txid_bytes = get_txid(&tx_preimage);

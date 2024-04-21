@@ -5,9 +5,14 @@ use hex_literal::hex as hexlit;
 use byteorder::{ByteOrder, LittleEndian};
 use secp256k1::{ecdsa::Signature, Message, PublicKey};
 
-use crate::parsing::transaction_structs::{Transaction, TxIn};
+use crate::parsing::transaction_structs::{Transaction, TxIn, InputType};
 use super::validate_parsing::serialize_output;
-use super::utils::{decode_num, hash160, hash_sha256, InputType, varint, get_outpoint, double_hash};
+use super::utils::{decode_num, hash160, hash_sha256, varint, get_outpoint, double_hash};
+
+
+// Implementation of Script opcodes for use in tx verification
+// The Stack is represented as VecDeque<Vec<u8>>
+// If an opcode returns Err(reason) script execution fails.
 
 fn op_swap(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     if stack.len() >= 2 {

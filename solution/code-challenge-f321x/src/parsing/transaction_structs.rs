@@ -1,8 +1,8 @@
-// Definition of data structures to hold a bitcoin transaction
+// Definition of data structures to hold a bitcoin transaction and relevant metadata
 
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
-use crate::validation::utils::{get_outpoint, varint, InputType};
+use crate::validation::utils::{get_outpoint, varint};
 
 #[serde_as]
 #[derive(Deserialize, Debug, Clone)]
@@ -61,6 +61,7 @@ pub struct TxMetadata {
     pub parents:        Option<Vec<String>>,
 }
 
+// main Transaction struct, containing all other transaction (meta-)data
 #[derive(Deserialize, Debug, Clone)]
 pub struct Transaction {
     #[serde(skip_deserializing)]
@@ -101,6 +102,37 @@ impl Transaction {
         }
         all_outputs
     }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum InputType {
+	P2TR,
+	P2PKH,
+	P2SH,
+	P2WPKH,
+	P2WSH,
+	UNKNOWN(String),
+}
+
+impl Default for InputType {
+    fn default() -> Self {
+        InputType::UNKNOWN("notSerialized".to_string())
+    }
+}
+
+impl InputType {
+    // can be applied on TxIn to set the according InputType
+    pub fn fetch_type(txin: &mut TxIn) {
+		let type_string = &txin.prevout.scriptpubkey_type;
+		txin.in_type = match type_string.as_str() {
+			"v1_p2tr" => InputType::P2TR,
+			"v0_p2wpkh" => InputType::P2WPKH,
+			"v0_p2wsh" => InputType::P2WSH,
+			"p2sh" => InputType::P2SH,
+			"p2pkh" => InputType::P2PKH,
+			_ => InputType::UNKNOWN(type_string.to_string()),
+		};
+	}
 }
 
 

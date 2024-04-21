@@ -2,6 +2,8 @@ use crate::parsing::transaction_structs::Transaction;
 use crate::validation::validate_parsing::{serialize_input, serialize_output};
 use crate::validation::utils::varint;
 
+// Weight multipliers for calculation of weight units from bytes:
+// -------------------
 // Field	Multiplier
 // version	x4
 // marker	x1
@@ -11,6 +13,7 @@ use crate::validation::utils::varint;
 // witness	x1
 // locktime	x4
 
+// returns: true if any &Transaction input contains a witness field
 pub fn is_segwit(tx: &Transaction) -> bool {
 	for txin in &tx.vin {
 		if txin.witness.is_some() {
@@ -20,6 +23,7 @@ pub fn is_segwit(tx: &Transaction) -> bool {
 	false
 }
 
+// returns: size of the complete input part of the transaction as u32
 fn input_weight_sum(tx: &Transaction) -> u32 {
 	let mut input_weight_sum: u32 = 0;
 	input_weight_sum += varint(tx.vin.len() as u128).len() as u32;
@@ -29,6 +33,7 @@ fn input_weight_sum(tx: &Transaction) -> u32 {
 	input_weight_sum
 }
 
+// returns: size of the complete output part of the transaction as u32
 fn output_weight_sum(tx: &Transaction) -> u32 {
 	let mut output_weight_sum: u32 = 0;
 	output_weight_sum += varint(tx.vout.len() as u128).len() as u32;
@@ -38,6 +43,7 @@ fn output_weight_sum(tx: &Transaction) -> u32 {
 	output_weight_sum
 }
 
+// returns: size in bytes of all witnesses contained in a transaction as u32
 fn witness_weight_sum(tx: &Transaction) -> u32 {
 	let mut witness_weight_sum: u32 = 0;
 	for txin in &tx.vin {
@@ -52,6 +58,9 @@ fn witness_weight_sum(tx: &Transaction) -> u32 {
 	witness_weight_sum
 }
 
+// calls the functions to calculate the weight of the different components 
+// of the transactions. Multiplies and sums them.
+// returns: tx weight as u32
 fn calculate_weight(tx: &Transaction) -> u32 {
 	let mut weight: u32 = 4 * 4; // Version: 4 bytes x 4
 	if is_segwit(tx) {
@@ -64,6 +73,8 @@ fn calculate_weight(tx: &Transaction) -> u32 {
 	weight
 }
 
+// calculates tx weight and checks if the weight is invalid (> blocksize)
+// returns: true if valid
 pub fn validate_and_set_weight(tx: &mut Transaction) -> bool {
 	let weight = calculate_weight(tx);
 	if weight > (4000000 - (1100 + 320)) {  // leave some space for header and coinbase tx

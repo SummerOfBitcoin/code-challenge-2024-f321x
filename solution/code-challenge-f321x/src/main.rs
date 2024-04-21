@@ -11,24 +11,8 @@ use mining::{mine_block, Block};
 use std::fs::File;
 use std::io::prelude::*;
 
-// use std::collections::HashSet;
-
- // let mut opcodes = Vec::new();
-      // let set: HashSet<String> = opcodes.into_iter().chain(count_opcodes(tx).into_iter()).collect();
-      // opcodes = set.into_iter().collect();
-      // println!("EVALUATING: {}", &tx.meta.json_path.as_ref().unwrap());
-      // for txin in &tx.vin {
-      //   if txin.in_type == InputType::P2SH {
-      //     if txin.witness == None {
-      //     std::process::exit(0);
-      //     }
-      //   }
-      // }
-
-      // println!("Transaction {:#?} invalid. Reason {}\n", tx.meta.json_path, msg);
-      //()
-      // println!("{:#?}", opcodes);
-
+// writes the final content stored in the Block struct to the passed output_path 
+// as output.txt formatted according to the exercise specification
 fn output_block(mined_block: Block, output_path: &str) {
   let mut output_file = File::create(output_path).expect("Unable to create output file");
 
@@ -45,6 +29,8 @@ fn output_block(mined_block: Block, output_path: &str) {
   }
 }
 
+// calls validate() on each Transaction in the passed Vec of Transaction
+// returns: HashSet(txid as hex String) of all invalid and untested transactions
 fn validate_transactions(parsed_transactions: &mut Vec<Transaction>) -> HashSet<String> {
   let mut invalid_transactions: HashSet<String> = HashSet::new();
 
@@ -60,21 +46,20 @@ fn validate_transactions(parsed_transactions: &mut Vec<Transaction>) -> HashSet<
 }
 
 fn main() {
+  // parses all json transactions in a Vec of Transaction structs 
   let mut parsed_transactions = parse_transactions_from_dir("../../mempool");
+  
+  // creates a Hashset of the TXIDs of all invalid and non verified transactions 
   let invalid_transactions = validate_transactions(&mut parsed_transactions);
+  
+  // stores all transactions that are not invalid in a HashMap (TXID(hex String), Transaction Struct)
   let mut valid_transactions = remove_invalid_transactions(parsed_transactions, invalid_transactions);
+  
+  // returns a Block struckt containing header, coinbase and final transaction list
   let block = mine_block(&mut valid_transactions);
+  
+  // writes blockfile to output.txt according to exercise specification
   output_block(block, "../../output.txt");
+
   println!("\nDone. Number of mined transactions: {}\n", valid_transactions.len());
 }
-
-// Todo:
-// Validation: absolute timelocks 1 (unix time), verify sigs
-//  Just verify the script and signature.
-// Hint: You have to serialize the transaction and then create a commitment hash.
-
-// asm to script pub conversion then checking address == (base58(pubkey) | bech32(pubkey))
-// remove dust txs and double spending
-// then do script validations like redeem script and their H160 etc same for witnesses
-// extract signatures from p2pkh and p2wkh and do ecdsa sig verification
-// finally use some ways to fit more txs in a block to maximize fee in total

@@ -1,12 +1,11 @@
-// functions to load the Json files from the specified directory in a Vec of Json objects (json crate)
-
 pub mod transaction_structs;
 
 use std::fs;
-use self::transaction_structs::Transaction;
+use self::transaction_structs::{Transaction, InputType};
 use serde_json::from_str;
-use crate::validation::utils::InputType;
 
+// applies the serde function on the loaded String content of the json
+// returns: Some(Transaction struct) if serde could parse it successfully
 fn parse_json(str_content: &str) -> Option<Transaction> {
 	let tx = from_str::<Transaction>(str_content);
 	if let Ok(tx) = tx {
@@ -16,6 +15,10 @@ fn parse_json(str_content: &str) -> Option<Transaction> {
 	None
 }
 
+// reads json file parameter into String, calls parse_json on the String and 
+// completes the struct with meta information (absolute path to json, input types)
+// returns: Option of Transaction struct
+// panics: if json is invalid
 fn parse_file_content(file_to_load: fs::DirEntry) -> Option<Transaction> {
 	let file_path_buf = file_to_load.path();
 
@@ -42,6 +45,8 @@ fn parse_file_content(file_to_load: fs::DirEntry) -> Option<Transaction> {
 	}
 }
 
+// opens passed directory calls parse_file_content on each file
+// returns: Vec of Transaction structs
 pub fn parse_transactions_from_dir(directory_path: &str) -> Vec<Transaction> {
 	let	mut transactions: Vec<Transaction> = Vec::new();
 

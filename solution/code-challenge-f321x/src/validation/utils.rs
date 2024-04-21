@@ -3,36 +3,8 @@ use ripemd::Ripemd160;
 use crate::parsing::transaction_structs::TxIn;
 use num_traits::ToPrimitive;
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum InputType {
-	P2TR,
-	P2PKH,
-	P2SH,
-	P2WPKH,
-	P2WSH,
-	UNKNOWN(String),
-}
 
-impl Default for InputType {
-    fn default() -> Self {
-        InputType::UNKNOWN("notSerialized".to_string())
-    }
-}
-
-impl InputType {
-	pub fn fetch_type(txin: &mut TxIn) {
-		let type_string = &txin.prevout.scriptpubkey_type;
-		txin.in_type = match type_string.as_str() {
-			"v1_p2tr" => InputType::P2TR,
-			"v0_p2wpkh" => InputType::P2WPKH,
-			"v0_p2wsh" => InputType::P2WSH,
-			"p2sh" => InputType::P2SH,
-			"p2pkh" => InputType::P2PKH,
-			_ => InputType::UNKNOWN(type_string.to_string()),
-		};
-	}
-}
-
+// returns: outpoint (rev txid bytes + index) of TxIn as serialized byte Vec<u8>
 pub fn get_outpoint(input: &TxIn) -> Vec<u8> {
 	let mut outpoint: Vec<u8> = hex::decode(&input.txid)
 										.expect("Failed to decode transaction ID")
@@ -44,6 +16,7 @@ pub fn get_outpoint(input: &TxIn) -> Vec<u8> {
 	outpoint
 }
 
+// returns: sha256 digest of passed byte slice as Vec<u8>
 pub fn hash_sha256(preimage: &[u8]) -> Vec<u8> {
 	let digest = preimage.to_owned();
 	let mut hasher = Sha256::new();
@@ -52,6 +25,8 @@ pub fn hash_sha256(preimage: &[u8]) -> Vec<u8> {
 	hasher.finalize_reset().to_vec()
 }
 
+// Hashes byte slice argument bytes twice
+// returns: Vec<u8> of the second hash bytes
 pub fn double_hash(preimage: &[u8]) -> Vec<u8> {
 	let mut digest: Vec<u8> = preimage.to_owned();
 
@@ -61,6 +36,8 @@ pub fn double_hash(preimage: &[u8]) -> Vec<u8> {
 	digest
 }
 
+// applies sha256 and ripemd160 hash on passed byte slice
+// returns: 20 byte hash as Vec<u8> 
 pub fn hash160(preimage: &[u8]) -> Vec<u8> {
 	let preimage = hash_sha256(preimage);
     let mut hasher = Ripemd160::new();
@@ -68,6 +45,8 @@ pub fn hash160(preimage: &[u8]) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
+// converts a given u128 integer to a little endian Vec<u8> 
+// with variable size according to bitcoin wiki specification
 pub fn varint(n: u128) -> Vec<u8> {
     if n <= 252 {
         vec![n as u8]
@@ -84,7 +63,7 @@ pub fn varint(n: u128) -> Vec<u8> {
         bytes.extend(&(n as u64).to_le_bytes());
         bytes
     } else {
-        panic!("Values larger than 0xffffffffffffffff not supported")
+        panic!("Varint: Values larger than 0xffffffffffffffff not supported")
     }
 }
 
@@ -97,23 +76,3 @@ pub fn decode_num(number:&[u8]) -> i128 {
 	let number = num_bigint::BigInt::from_signed_bytes_le(number);
 	number.to_i128().expect("number outside of i128 scope")
 }
-
-// fn validate_ecdsa_signature(msg: String, pubkey: String, sig: String) -> bool {
-
-
-// 	false
-// }
-
-// let message = Message::from_digest_slice(&[0xab; 32]).expect("32 bytes");
-// let sig = secp.sign_ecdsa(&message, &secret_key);
-// assert_eq!(secp.verify_ecdsa(&message, &sig, &public_key), Ok(()));
-
-// let message = Message::from_digest_slice(&[0xcd; 32]).expect("32 bytes");
-// assert_eq!(secp.verify_ecdsa(&message, &sig, &public_key), Err(Error::IncorrectSignature));
-
-// pub fn verify_ecdsa(
-//     &self,
-//     msg: &Message,
-//     sig: &Signature,
-//     pk: &PublicKey
-// ) -> Result<(), Error>
