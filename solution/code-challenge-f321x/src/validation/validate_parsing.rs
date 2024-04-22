@@ -22,7 +22,7 @@ fn hash_txid(txid: Vec<u8>) -> String {
 
 // serialize given &TxIn to a byte-Vec<u8> for later use in assembling the full transaction
 // used for calculation of txid
-// returns: Vec<u8> of the byte serialized &TxIn 
+// returns: Vec<u8> of the byte serialized &TxIn
 pub fn serialize_input(input: &TxIn) -> Vec<u8> {
 	let mut serialized_input = get_outpoint(input);
 	let scriptsig_len = match &input.scriptsig {
@@ -43,7 +43,7 @@ pub fn serialize_input(input: &TxIn) -> Vec<u8> {
 
 // serialize given &TxOut to a byte-Vec<u8> for later use in assembling the full transaction
 // used for calculation of the txid
-// returns: Vec<u8> of the byte serialized &TxOut 
+// returns: Vec<u8> of the byte serialized &TxOut
 pub fn	serialize_output(output: &TxOut) -> Vec<u8> {
 	let mut serialized_output: Vec<u8> = Vec::new();
 	let value = output.value.to_le_bytes();
@@ -71,11 +71,12 @@ fn serialize_witnesses_with_amount(tx: &Transaction) -> Vec<u8> {
 		if let Some(witnesses_hex) = input.witness.as_ref() {
 			witnesses.extend(varint(witnesses_hex.len() as u128));
 			for witness_element in witnesses_hex {
-
 				let witness_element_bytes: Vec<u8> = hex::decode(witness_element).expect("decoding witness hex failed");
 				witnesses.extend(varint(witness_element_bytes.len() as u128));
 				witnesses.extend(witness_element_bytes);
 			};
+		} else {
+			witnesses.extend(hexlit!("00").to_vec()); // non witness inputs
 		};
 	};
 	witnesses

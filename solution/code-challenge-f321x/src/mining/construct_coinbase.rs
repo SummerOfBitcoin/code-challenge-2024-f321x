@@ -5,7 +5,6 @@ use crate::validation::utils::{double_hash, varint};
 pub struct CoinbaseTxData {
     pub txid_hex:               String,
     pub txid_natural_bytes:     Vec<u8>,
-    pub wtxid_hex:              String,
     pub assembled_tx:           Vec<u8>,
 }
 
@@ -50,9 +49,18 @@ fn calc_wtxid_commitment_scriptpubkey(block_txs: &Vec<Transaction>) -> Vec<u8> {
 		let rev_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
 		txids_bytes.push(rev_txid_bytes);
 	}
+
+    // println!("WTXIDS: ");
+    // for wtxid in &txids_bytes {
+    //     let reversed_wtxid: Vec<u8> = wtxid.iter().rev().cloned().collect();
+    //     println!("{}", hex::encode(&reversed_wtxid));
+    // }
+
 	let mut wtxid_merkle_root = get_merkle_root(&txids_bytes);
+
     wtxid_merkle_root.extend(hexlit!("0000000000000000000000000000000000000000000000000000000000000000"));
     let witness_commitment = double_hash(&wtxid_merkle_root);
+
     let mut witness_commitment_scriptpubkey = hexlit!("6a24aa21a9ed").to_vec();  // OP_RETURN + len + witness code
 
     witness_commitment_scriptpubkey.extend(&witness_commitment);
@@ -93,8 +101,6 @@ fn serialize_coinbase_transaction(block_txs: &Vec<Transaction>, is_segwit: bool)
     coinbase_transaction.extend(hexlit!("0000000000000000")); // witness amount
     coinbase_transaction.extend(varint(wtxid_commitment_scriptpubkey.len() as u128)); // len wtxid commitment
 
-    // println!("Witness commitment scriptpubkey: {}", hex::encode(&wtxid_commitment_scriptpubkey));
-
     coinbase_transaction.extend(wtxid_commitment_scriptpubkey);
     // amnt witness stack items + len witness reserved value + value
     if is_segwit {
@@ -111,7 +117,6 @@ pub fn assemble_coinbase_transaction(block_txs: &Vec<Transaction>) -> CoinbaseTx
     CoinbaseTxData {
         txid_hex: hex::encode(get_txid(&coinbase_tx_no_witness)),
         txid_natural_bytes: double_hash(&coinbase_tx_no_witness),
-        wtxid_hex: hex::encode(get_txid(&coinbase_tx_witness)),
         assembled_tx: coinbase_tx_witness,
     }
 }

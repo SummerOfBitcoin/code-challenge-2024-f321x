@@ -26,7 +26,6 @@ fn return_block(block_header_bytes: &[u8], coinbase_tx: CoinbaseTxData,
 	for tx in transactions {
 		txid_strings.push(tx.meta.txid_hex.clone());
 	}
-
 	Block {
 		header: header_string,
 		coinbase_tx: coinbase_tx_hex,
@@ -44,11 +43,10 @@ pub fn mine_block(txid_tx_map: &mut HashMap<String, Transaction>) -> Block {
 
 	let block_header = construct_header(&block_ordered, &coinbase_tx);
 
+	// for tx in &block_ordered {  // for validation with bitcoin-cli in python script.
+	// pipe output in >> wtxids.txt & run python3 validate_wtxids.py
+	// 	println!("{},{},{}", tx.meta.txid_hex, tx.meta.wtxid_hex, tx.meta.json_path.as_ref().unwrap());
+	// }
+
 	return_block(&block_header, coinbase_tx, &block_ordered)
 }
-
-
-// First line: The block header.
-// Second line: The serialized coinbase transaction.
-// Following lines: The transaction IDs (txids) of the transactions mined in the block, in order.
-// The first txid should be that of the coinbase transaction

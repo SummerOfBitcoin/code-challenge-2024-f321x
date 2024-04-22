@@ -11,7 +11,7 @@ use mining::{mine_block, Block};
 use std::fs::File;
 use std::io::prelude::*;
 
-// writes the final content stored in the Block struct to the passed output_path 
+// writes the final content stored in the Block struct to the passed output_path
 // as output.txt formatted according to the exercise specification
 fn output_block(mined_block: Block, output_path: &str) {
   let mut output_file = File::create(output_path).expect("Unable to create output file");
@@ -46,20 +46,19 @@ fn validate_transactions(parsed_transactions: &mut Vec<Transaction>) -> HashSet<
 }
 
 fn main() {
-  // parses all json transactions in a Vec of Transaction structs 
+  // parses all json transactions in a Vec of Transaction structs
   let mut parsed_transactions = parse_transactions_from_dir("../../mempool");
-  
-  // creates a Hashset of the TXIDs of all invalid and non verified transactions 
+
+  // creates a Hashset of the TXIDs of all invalid and non verified transactions
   let invalid_transactions = validate_transactions(&mut parsed_transactions);
-  
+
   // stores all transactions that are not invalid in a HashMap (TXID(hex String), Transaction Struct)
   let mut valid_transactions = remove_invalid_transactions(parsed_transactions, invalid_transactions);
-  
-  // returns a Block struckt containing header, coinbase and final transaction list
-  let block = mine_block(&mut valid_transactions);
-  
-  // writes blockfile to output.txt according to exercise specification
-  output_block(block, "../../output.txt");
 
-  println!("\nDone. Number of mined transactions: {}\n", valid_transactions.len());
+  // returns a Block struckt containing header, coinbase and final transaction list
+  let block: Block = mine_block(&mut valid_transactions);
+
+  // writes blockfile to output.txt according to exercise specification
+  println!("\nDone. Number of mined transactions: {}\n", &block.txids.len());
+  output_block(block, "../../output.txt");
 }
