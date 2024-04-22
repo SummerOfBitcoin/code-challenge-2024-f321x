@@ -123,7 +123,6 @@ fn op_ifdup(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
 // is not equal to or longer than the value of the top stack item. The precise semantics are described in BIP 0112.
 // Assume relative locktimes are valid
 fn op_checksequenceverify(stack: &mut VecDeque<Vec<u8>>, txin: &TxIn, tx: &Transaction) -> Result<(), &'static str> {
-// check tx version >= 2
     let sequence = txin.sequence;
     let disable_flag = 1 << 31;
     let locktime_mask = 0x0000ffff;
@@ -380,17 +379,11 @@ fn op_checkmultisig(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn
     Ok(())
 }
 
-// Compares the first signature against each public key until it finds an ECDSA match. Starting with the subsequent public key, it compares the second signature against each remaining public key
-// until it finds an ECDSA match.
-// The process is repeated until all signatures have been checked or not enough public keys remain to produce a successful result.
-// All signatures need to match a public key. Because public keys are not checked again if they fail any signature comparison, signatures must be placed in the scriptSig using the same order as
-// their corresponding public keys were placed in the scriptPubKey or redeemScript. If all signatures are valid, 1 is returned, 0 otherwise. Due to a bug, one extra unused value is removed from the stack.
 
 pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result<(), Box<dyn Error>> {
     let mut stack: VecDeque<Vec<u8>> = VecDeque::new();
-    // let mut flow_stack: Vec<Flow> = Vec::new();
-
     let mut index = 0;
+
     while index < script.len() {
         let opcode = script[index];
         match opcode {
@@ -440,69 +433,16 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
             0x4d => op_pushdata(&mut stack, 2, &mut index, &script)?,
             0x4e => op_pushdata(&mut stack, 4, &mut index, &script)?,
             0xae => op_checkmultisig(&mut stack, tx, txin)?,
-            // 0x63 => if !op_if(&mut stack) { return false },  // OP_IF
-            // 0x68 => // OP_ENDIF
             _ => panic!("no script operator found!"),
         };
         index += 1;
     }
     if let Some(last) = stack.pop_back() {
         if last.is_empty() {
-            return Err("SCRIPT INVALID".into());//, &tx.meta.json_path.as_ref().unwrap()).into());
+            return Err("SCRIPT INVALID".into());
         };
     }
     Ok(())
 }
-
-//     "OP_IF",
-//     "OP_ELSE",
-//     "OP_ENDIF",
-//     "OP_NOTIF",
-
-
-            // 0x63 => { // OP_IF
-            //     let condition = stack.pop_back().unwrap();
-            //     if condition.is_empty() {
-            //         // Skip to the corresponding OP_ELSE or OP_ENDIF
-            //         let mut depth = 1;
-            //         while depth > 0 {
-            //             let op = stack.pop_back().unwrap();
-            //             if op == vec![0x67] { // OP_ELSE
-            //                 if depth == 1 {
-            //                     break;
-            //                 }
-            //                 depth -= 1;
-            //             } else if op == vec![0x68] { // OP_ENDIF
-            //                 depth -= 1;
-            //             } else if op == vec![0x63] { // OP_IF
-            //                 depth += 1;
-            //             }
-            //         }
-            //     }
-            // }
-
-// enum Flow {
-//     IF,
-//     ELSE,
-//     END
-// }
-
-// fn op_if(stack: &mut VecDeque<Vec<u8>>) -> bool {
-//     if let Some(condition) = stack.pop_back() {
-//         if condition.is_empty() {
-//             // go to else or endif
-//             while !stack.is_empty() {
-//                 if let Some(instruction) = stack.pop_back() {
-//                     if instruction == vec![0x67]  {  // OP_ENDIF
-//                         break;
-//                     } else if instruction == vec![0x68] { //OP_ELSE
-
-//                     }
-//                 } else { return false };
-//             }
-
-//         } else { return true };
-//     } else { return false };
-// }
 
 
