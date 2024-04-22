@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 use crate::parsing::transaction_structs::Transaction;
 
+
+// search mempool for outpoints referenced in transactions and stores them in
+// transaction.meta.parents as hex txid to respect parent child order in transaction sorting
+// children with invalid parents have been removed in utils_main/remove_invalid_transactions()
 pub fn assign_mempool_parents(transactions: &mut HashMap<String, Transaction>) {
 	let mut parent_transactions: HashMap<String, Vec<String>> = HashMap::new();
 

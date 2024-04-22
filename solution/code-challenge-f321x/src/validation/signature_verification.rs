@@ -3,9 +3,9 @@ use hex_literal::hex as hexlit;
 use crate::parsing::transaction_structs::{Transaction, TxIn};
 use super::{script::evaluate_script, utils::{double_hash, get_outpoint, hash160}, ValidationResult};
 
-// deserializes pubkey from p2wpkh scriptpubkey and reserializes it with the 
+// deserializes pubkey from p2wpkh scriptpubkey and reserializes it with the
 // according opcodes to the scriptcode used in the tx commitment.
-// returns: scriptcode of the input as Vec<u8> 
+// returns: scriptcode of the input as Vec<u8>
 fn serialize_p2wpkh_scriptcode(txin: &TxIn) -> Vec<u8> {
 	let mut scriptcode = Vec::new();
 	let mut scriptpubkey_bytes = hex::decode(&txin.prevout.scriptpubkey)
@@ -90,85 +90,3 @@ pub fn verify_p2pkh(tx: &Transaction, txin: &TxIn) -> ValidationResult {
 		Err(err) => ValidationResult::Invalid(err.to_string()),
 	}
 }
-
-// -----------------------------------------
-// Drafts and tests for eventual later use:|
-// -----------------------------------------
-
-// fn remove_last_data_push_operator(script: &mut Vec<u8>) -> ValidationResult {
-// 	let mut last_op_pushdata_index = 0;
-// 	let mut index = 0;
-// 	let mut pushdata_byte_amount = 0;
-// 	let mut last_type_pushdata = false;
-
-// 	while index < script.len() {
-// 		if (0x01..=0x4b).contains(&script[index]) {  // OP_PUSHBYTES
-// 			last_op_pushdata_index = index;
-// 			index += script[index] as usize;
-// 			last_type_pushdata = false;
-// 		} else if (0x4c..=0x4e).contains(&script[index]) {  // OP_PUSHDATA
-// 			last_type_pushdata = true;
-// 			last_op_pushdata_index = index;
-// 			let byte_amount = match script[index] {
-// 				0x4c => {
-// 					pushdata_byte_amount = 1;
-// 					get_pushdata_amount(&script, pushdata_byte_amount, index)
-// 				},
-// 				0x4d => {
-// 					pushdata_byte_amount = 2;
-// 					get_pushdata_amount(&script, 2, index)
-// 				},
-// 				0x4e =>	{
-// 					pushdata_byte_amount = 4;
-// 					get_pushdata_amount(&script, 4, index)
-// 				},
-// 				_ => { return ValidationResult::Invalid("byte amount invalid verify p2wsh".to_string()) }
-// 			};
-// 			if let Ok(number) = byte_amount {
-// 				index += pushdata_byte_amount as usize + number as usize;
-// 			} else { return ValidationResult::Invalid("couldn't get byte amount in p2sh 2nd check".to_string())};
-// 		}
-// 		index += 1;
-// 	}
-// 	if !last_type_pushdata && last_op_pushdata_index != 0 {
-// 		script.remove(last_op_pushdata_index);
-// 	} else if last_type_pushdata && last_op_pushdata_index != 0 {
-// 		script.remove(last_op_pushdata_index);
-// 		for _ in 0..pushdata_byte_amount {
-// 			script.remove(last_op_pushdata_index);
-// 		}
-// 	}
-// 	ValidationResult::Valid
-// }
-
-// pub fn verify_p2sh(tx: &Transaction, txin: &TxIn) -> ValidationResult {
-// 	let mut script: Vec<u8> = Vec::new();
-// 	script.extend(hex::decode(txin.scriptsig.as_ref()
-// 														.expect("p2psh scriptsig empty"))
-// 														.expect("verify p2sh scriptsig hex decode failed"));
-
-// 	script.extend(hex::decode(&txin.prevout.scriptpubkey).expect("p2sh scriptpubkey hex decode failed"));
-// 	println!("\nEVAL HASH OF SCRIPT P2SH: {}", hex::encode(&script));
-// 	let result = evaluate_script(script, txin, tx);
-// 	match result {
-// 		Ok(_) => ValidationResult::Valid,
-// 		Err(err) => {
-// 			println!("INVALID hash verification p2sh");
-// 			return ValidationResult::Invalid(err.to_string());
-// 		},
-// 	};
-// 	let mut script: Vec<u8> = Vec::new();
-// 	script.extend(hex::decode(txin.scriptsig.as_ref()
-// 														.expect("p2psh scriptsig empty"))
-// 														.expect("verify p2sh scriptsig hex decode failed"));
-// 	match remove_last_data_push_operator(&mut script) {
-// 		ValidationResult::Valid => (),
-// 		ValidationResult::Invalid(err) => return ValidationResult::Invalid(err),
-// 	};
-// 	println!("\nEVAL SCRIPT P2SH: {}", hex::encode(&script));
-// 	let result = evaluate_script(script, txin, tx);
-// 	match result {
-// 		Ok(_) => ValidationResult::Valid,
-// 		Err(err) => ValidationResult::Invalid(err.to_string()),
-// 	}
-// }

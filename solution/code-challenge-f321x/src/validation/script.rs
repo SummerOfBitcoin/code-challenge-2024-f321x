@@ -13,6 +13,7 @@ use super::utils::{decode_num, hash160, hash_sha256, varint, get_outpoint, doubl
 // Implementation of Script opcodes for use in tx verification
 // The Stack is represented as VecDeque<Vec<u8>>
 // If an opcode returns Err(reason) script execution fails.
+// Entry is fn evaluate_script()
 
 fn op_swap(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     if stack.len() >= 2 {
@@ -121,7 +122,6 @@ fn op_ifdup(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
 
 // Marks transaction as invalid if the relative lock time of the input (enforced by BIP 0068 with nSequence)
 // is not equal to or longer than the value of the top stack item. The precise semantics are described in BIP 0112.
-// Assume relative locktimes are valid
 fn op_checksequenceverify(stack: &mut VecDeque<Vec<u8>>, txin: &TxIn, tx: &Transaction) -> Result<(), &'static str> {
     let sequence = txin.sequence;
     let disable_flag = 1 << 31;
@@ -169,6 +169,9 @@ fn op_checklocktimeverify(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin:
     Ok(())
 }
 
+// serializes input of legacy transaction into Vec<u8>
+// all inputs except the one that is being verified (parameter) will be returned as 0x00
+// returns: byte serialized input as Vec<u8>
 fn serialize_input_legacy(input: &TxIn, signing_txin: &TxIn) -> Vec<u8> {
 	let mut serialized_input = get_outpoint(input);
 
@@ -186,12 +189,13 @@ fn serialize_input_legacy(input: &TxIn, signing_txin: &TxIn) -> Vec<u8> {
 	serialized_input
 }
 
+// Serialize legacy transaction (non segwit) for signature verification of specified input
+// returns: double SHA256 digest of serialized transaction
 fn serialize_legacy_tx(tx: &Transaction, signing_txin: &TxIn, sighash: u32) -> Vec<u8> {
     let mut preimage: Vec<u8> = Vec::new();
 
     preimage.extend(&tx.version.to_le_bytes());  // VERSION
     preimage.extend(varint(tx.vin.len() as u128));  // INPUT amount
-
 	for tx_in in &tx.vin {
 		preimage.append(&mut serialize_input_legacy(tx_in, signing_txin));
 	}
@@ -201,10 +205,10 @@ fn serialize_legacy_tx(tx: &Transaction, signing_txin: &TxIn, sighash: u32) -> V
 	}
 	preimage.extend(tx.locktime.to_le_bytes());
     preimage.extend(sighash.to_le_bytes());
-
     double_hash(&preimage)
 }
 
+// Verify DER encoded signature against message and pubkey
 fn verify_sig_op_checksig(msg: &[u8], pubkey: &[u8], sig: &[u8]) -> Result<(), String> {
 	let sig = Signature::from_der(sig);
 	let mut sig = match sig {
@@ -224,7 +228,7 @@ fn verify_sig_op_checksig(msg: &[u8], pubkey: &[u8], sig: &[u8]) -> Result<(), S
 	}
 }
 
-// for now implemented for non-witness transactions
+// implemented for non-witness transactions and SIGHASH_ALL only
 fn op_checksig(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn) -> Result<(), String> {
     if stack.len() < 2 {return Err("OP_CHECKSIG stack < 2".to_string())};
     let pubkey = if let Some(pubkey) = stack.pop_back() {
@@ -236,7 +240,7 @@ fn op_checksig(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn) -> 
     let sighash: u32 = if let Some(sighash_byte) = der_signature.pop() {
         sighash_byte as u32
     } else { return Err("OP_CHECKSIG popping sighash from signature failed".to_string()) };
-    if sighash != 0x00000001 {  // IMPLEMENT OTHER SIGHASH TYPES
+    if sighash != 0x00000001 {  // SIGHASH_ALL
         return Err("sighash not implemented".to_string());
     }
     let message = match txin.in_type {
@@ -300,7 +304,6 @@ fn op_pushdata(stack: &mut VecDeque<Vec<u8>>, amount_bytes: u8, index: &mut usiz
 
     let amount_of_bytes_to_push = get_pushdata_amount(script, amount_bytes, *index)?;
     *index += amount_bytes as usize + 1;
-    // println!("DATA amount to push: {} | Start index: {}", amount_of_bytes_to_push, hex::encode(&script[*index ..*index + 2]));
     data_push.resize(amount_of_bytes_to_push as usize, 0);
     data_push.clone_from_slice(&script[*index..*index + amount_of_bytes_to_push as usize]);
     stack.push_back(data_push);
@@ -313,7 +316,7 @@ fn op_depth(stack: &mut VecDeque<Vec<u8>>) -> Result<(), &'static str> {
     Ok(())
 }
 
-// x sig1 sig2 ... <number of signatures> pub1 pub2 <number of public keys>
+// NULL sig1 sig2 ... <number of signatures> pub1 pub2 <number of public keys>
 fn op_checkmultisig(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn) -> Result<(), &'static str> {
     let mut signatures: VecDeque<Vec<u8>> = VecDeque::new();
     let mut pubkeys: VecDeque<Vec<u8>> = VecDeque::new();
@@ -355,7 +358,6 @@ fn op_checkmultisig(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn
         while retry {
             if let Some(pubkey) = pubkeys.pop_back() {
                 retry = false;
-                // println!("CHECKMULTISIG -> \nPubkey {} \nSignature {}\n\n", hex::encode(&pubkey), hex::encode(&signature));
                 match verify_sig_op_checksig(&message, &pubkey, &signature) {
                     Ok(_) => {
                         number_of_signatures -= 1;
@@ -380,6 +382,8 @@ fn op_checkmultisig(stack: &mut VecDeque<Vec<u8>>, tx: &Transaction, txin: &TxIn
 }
 
 
+// main script interpretion function
+// executes the script argument and returns Ok() if the script is valid and True
 pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result<(), Box<dyn Error>> {
     let mut stack: VecDeque<Vec<u8>> = VecDeque::new();
     let mut index = 0;
@@ -387,14 +391,14 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
     while index < script.len() {
         let opcode = script[index];
         match opcode {
-            0xa8 => { // SHA256
+            0xa8 => {                                               // SHA256
                 if let Some(last) = stack.pop_back() {
                     stack.push_back(hash_sha256(&last));
                 } else {
                     return Err("OP_SHA256 stack empty".into());
                 }
             },
-            0xa9 => {  // OP_HASH160
+            0xa9 => {                                               // OP_HASH160
                 if let Some(last) = stack.pop_back() {
                     stack.push_back(hash160(&last));
                 } else {
@@ -402,37 +406,37 @@ pub fn evaluate_script(script: Vec<u8>, txin: &TxIn, tx: &Transaction) -> Result
                 }
             },
             0x75 => if stack.pop_back().is_none() { return Err("OP_DROP stack empty".into()) }, // OP_DROP
-            0x7c => op_swap(&mut stack)?,
-            0x00 => stack.push_back(Vec::new()), // OP_0
-            0x76 => { // OP_DUP
+            0x7c => op_swap(&mut stack)?,                           // OP_SWAP
+            0x00 => stack.push_back(Vec::new()),                    // OP_0
+            0x76 => {                                               // OP_DUP
                 if let Some(last) = stack.back() {
                     stack.push_back(last.clone());
                 } else {
                     return Err("OP_DUP stack empty.".into())
                 }
             },
-            0x87 => op_equal(&mut stack)?, // OP_EQUAL
-            0x7b => op_rot(&mut stack)?,   // OP_ROT
-            0x82 => op_size(&mut stack)?, // OP_SIZE
-            0x78 => op_over(&mut stack)?, // OP_OVER
-            0xa0 => op_greaterthan(&mut stack)?, // OP_GREATERTHAN
-            0x88 => op_equalverify(&mut stack)?, // OP_EQUALVERIFY
-            0x73 => op_ifdup(&mut stack)?, // OP_IFDUP
-            0xb2 => op_checksequenceverify(&mut stack, txin, tx)?, // OP_CSV
-            0xb1 => op_checklocktimeverify(&mut stack, tx, txin)?, // OP_CLTV
-            0xac => op_checksig(&mut stack, tx, txin)?,  // OP_CHECKSIG
-            0x74 => op_depth(&mut stack)?, // OP_DEPTH
-            0xad => {  // OP_CHECKSIGVERIFY
+            0x87 => op_equal(&mut stack)?,                          // OP_EQUAL
+            0x7b => op_rot(&mut stack)?,                            // OP_ROT
+            0x82 => op_size(&mut stack)?,                           // OP_SIZE
+            0x78 => op_over(&mut stack)?,                           // OP_OVER
+            0xa0 => op_greaterthan(&mut stack)?,                    // OP_GREATERTHAN
+            0x88 => op_equalverify(&mut stack)?,                    // OP_EQUALVERIFY
+            0x73 => op_ifdup(&mut stack)?,                          // OP_IFDUP
+            0xb2 => op_checksequenceverify(&mut stack, txin, tx)?,  // OP_CSV
+            0xb1 => op_checklocktimeverify(&mut stack, tx, txin)?,  // OP_CLTV
+            0xac => op_checksig(&mut stack, tx, txin)?,             // OP_CHECKSIG
+            0x74 => op_depth(&mut stack)?,                          // OP_DEPTH
+            0xad => {                                               // OP_CHECKSIGVERIFY
                 op_checksig(&mut stack, tx, txin)?;
                 op_verify(&mut stack)?;
             },
-            0x51 ..= 0x60 => op_pushnum(&mut stack, opcode)?, // OP_PUSHNUM (1-16)
-            0x4f => stack.push_back(vec![255]),  // OP_1NEGATE
-            0x01 ..= 0x4b => op_pushbytes(&mut stack, &mut index, &script)?,
-            0x4c => op_pushdata(&mut stack, 1, &mut index, &script)?,
-            0x4d => op_pushdata(&mut stack, 2, &mut index, &script)?,
-            0x4e => op_pushdata(&mut stack, 4, &mut index, &script)?,
-            0xae => op_checkmultisig(&mut stack, tx, txin)?,
+            0x51 ..= 0x60 => op_pushnum(&mut stack, opcode)?,   // OP_PUSHNUM (1-16)
+            0x4f => stack.push_back(vec![255]),                        // OP_1NEGATE
+            0x01 ..= 0x4b => op_pushbytes(&mut stack, &mut index, &script)?,          // OP_PUSHBYTES
+            0x4c => op_pushdata(&mut stack, 1, &mut index, &script)?,   // OP_PUSHDATA1
+            0x4d => op_pushdata(&mut stack, 2, &mut index, &script)?,   // OP_PUSHDATA2
+            0x4e => op_pushdata(&mut stack, 4, &mut index, &script)?,   // OP_PUSHDATA4
+            0xae => op_checkmultisig(&mut stack, tx, txin)?,           // OP_CHECKMULTISIG
             _ => panic!("no script operator found!"),
         };
         index += 1;

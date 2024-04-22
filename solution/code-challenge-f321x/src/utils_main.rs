@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use crate::parsing::transaction_structs::Transaction;
 
+// Converts a Vec<Transaction> to HashMap<hex txid Sting, Transaction>
 pub fn convert_to_hashmap(transactions: Vec<Transaction>) -> HashMap<String, Transaction> {
 	let mut txid_tx_map = HashMap::new();
 
@@ -10,7 +11,9 @@ pub fn convert_to_hashmap(transactions: Vec<Transaction>) -> HashMap<String, Tra
 	txid_tx_map
 }
 
-pub fn remove_invalid_transactions(transactions: Vec<Transaction>, 
+// Returns the passed Vec<Transaction> as HashMap<hex txid Sting, Transaction>
+// with all invalid transactions specified in HashSet<hex txid String> removed from it
+pub fn remove_invalid_transactions(transactions: Vec<Transaction>,
                                     mut invalid_transactions: HashSet<String>) -> HashMap<String, Transaction> {
     let mut transactions = convert_to_hashmap(transactions);
     let mut nothing_removed: bool = false;
@@ -21,7 +24,8 @@ pub fn remove_invalid_transactions(transactions: Vec<Transaction>,
         for (txid, tx) in transactions.iter() {
             for input in &tx.vin {
                 if invalid_transactions.contains(&input.txid) {
-                    invalid_transactions.insert(txid.clone());  // remove transactions with invalid, unconfirmed parents
+                    // also remove transactions with invalid, unconfirmed (mempool) parents
+                    invalid_transactions.insert(txid.clone());
                 };
             };
         }

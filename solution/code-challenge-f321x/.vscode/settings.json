@@ -60,5 +60,6 @@
 		"./Cargo.toml",
 		"./Cargo.toml",
 		"./Cargo.toml"
-	]
+	],
+	"editor.defaultFormatter": "rust-lang.rust-analyzer"
 }

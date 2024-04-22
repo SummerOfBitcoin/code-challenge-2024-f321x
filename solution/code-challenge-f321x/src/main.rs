@@ -13,14 +13,14 @@ use std::io::prelude::*;
 
 // writes the final content stored in the Block struct to the passed output_path
 // as output.txt formatted according to the exercise specification
-fn output_block(mined_block: Block, output_path: &str) {
+fn output_block(mined_block: &Block, output_path: &str) {
   let mut output_file = File::create(output_path).expect("Unable to create output file");
 
-  writeln!(output_file, "{}", mined_block.header).expect("Unable to write to file");
-  writeln!(output_file, "{}", mined_block.coinbase_tx).expect("Unable to write to file");
+  writeln!(output_file, "{}", mined_block.header_hex).expect("Unable to write to file");
+  writeln!(output_file, "{}", mined_block.coinbase_tx_hex).expect("Unable to write to file");
 
-  let len = mined_block.txids.len();
-  for (index, tx) in mined_block.txids.iter().enumerate() {
+  let len = mined_block.txids_hex.len();
+  for (index, tx) in mined_block.txids_hex.iter().enumerate() {
     if index < len - 1 {
         writeln!(output_file, "{}", tx).expect("Unable to write to file");
     } else {
@@ -59,6 +59,6 @@ fn main() {
   let block: Block = mine_block(&mut valid_transactions);
 
   // writes blockfile to output.txt according to exercise specification
-  println!("\nDone. Number of mined transactions: {}\n", &block.txids.len());
-  output_block(block, "../../output.txt");
+  output_block(&block, "../../output.txt");
+  println!("\nDone. Number of mined transactions: {}\n", &block.txids_hex.len());
 }

@@ -4,7 +4,10 @@ use super::construct_coinbase::{get_merkle_root, CoinbaseTxData};
 use std::time::{SystemTime, UNIX_EPOCH};
 use num_bigint::BigUint;
 
-
+// changes the 4 byte nonce at the end of the header to change the HASH256
+// so long till the header + nonce produce a HASH256 below the specified target
+// Comparison of the hash against the target happens as BigUint integer
+// returns: nonce that produces a valid hash as u32
 fn mine_nonce(block_header: &[u8]) -> u32 {
 	let target = BigUint::from_bytes_be(&hexlit!("00000ffff0000000000000000000000000000000000000000000000000000000"));
 	let max_nonce = std::u32::MAX;
@@ -20,11 +23,13 @@ fn mine_nonce(block_header: &[u8]) -> u32 {
 
         if block_hash_num < target {
             return nonce;
-        }
+        };
     }
     panic!("All nonces used in mining!");
 }
 
+// assembles the blockheader according to the specification using hardcoded previous block, version
+// and target according to the exercise
 pub fn construct_header(block_transactions: &Vec<Transaction>, coinbase_tx: &CoinbaseTxData) -> Vec<u8> {
 	let mut block_header: Vec<u8> = Vec::new();
 
@@ -42,7 +47,7 @@ pub fn construct_header(block_transactions: &Vec<Transaction>, coinbase_tx: &Coi
 											.expect("construct_header: Error decoding hex ");
 		let rev_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
 		txids_bytes.push(rev_txid_bytes);
-	}
+	};
 	block_header.extend(get_merkle_root(&txids_bytes)); // merkle root
 
 	if let Ok(time_sec) = SystemTime::now().duration_since(UNIX_EPOCH) {

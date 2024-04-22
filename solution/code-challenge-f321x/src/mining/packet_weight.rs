@@ -6,6 +6,8 @@ struct FeeAndWeight {
     weight: u64,
 }
 
+// recursively goes to the bottom of a transaction dependency structure and sums up the fee and weight
+// up to the passed transaction which are returned in FeeAndWeight
 fn calc_parents(transactions:& HashMap<String, Transaction>, child_txid: &String) -> FeeAndWeight {
     let mut fee_and_weight: FeeAndWeight;
 
@@ -27,6 +29,8 @@ fn calc_parents(transactions:& HashMap<String, Transaction>, child_txid: &String
     fee_and_weight
 }
 
+// assigning the packet fee, weight and feerate to each transaction.
+// the packet data are equal to the tx data if the tx has no parents
 pub fn calculate_packet_weights(transactions: &mut HashMap<String, Transaction>) {
     let transactions_original_clone = transactions.clone();
 
