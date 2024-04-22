@@ -1,79 +1,80 @@
 // Definition of data structures to hold a bitcoin transaction and relevant metadata
 
+use crate::validation::utils::{get_outpoint, varint};
 use serde::Deserialize;
 use serde_with::{serde_as, NoneAsEmptyString};
-use crate::validation::utils::{get_outpoint, varint};
 
 #[serde_as]
 #[derive(Deserialize, Debug, Clone)]
 pub struct TxOut {
     #[serde_as(as = "NoneAsEmptyString")]
-    pub	scriptpubkey:			Option<String>,
-	pub	scriptpubkey_asm:		String,
-	pub	scriptpubkey_type:		String,
-	pub	scriptpubkey_address: 	Option<String>,
-	pub	value:					u64,
+    pub scriptpubkey: Option<String>,
+    pub scriptpubkey_asm: String,
+    pub scriptpubkey_type: String,
+    pub scriptpubkey_address: Option<String>,
+    pub value: u64,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct Script {
-	pub	scriptpubkey:			String,
-	pub	scriptpubkey_asm:		String,
-	pub	scriptpubkey_type:		String,
-	pub	scriptpubkey_address: 	Option<String>,
-	pub	value:					u64,
+    pub scriptpubkey: String,
+    pub scriptpubkey_asm: String,
+    pub scriptpubkey_type: String,
+    pub scriptpubkey_address: Option<String>,
+    pub value: u64,
 }
 
 #[serde_as]
 #[derive(Deserialize, Debug, PartialEq, Clone)]
 pub struct TxIn {
     #[serde(skip_deserializing)]
-    pub in_type:                    InputType,
-    pub txid:                       String,
-    pub vout: 	                    u32,
+    pub in_type: InputType,
+    pub txid: String,
+    pub vout: u32,
     #[serde_as(as = "NoneAsEmptyString")]
-    pub scriptsig: 		            Option<String>,
+    pub scriptsig: Option<String>,
     #[serde_as(as = "NoneAsEmptyString")]
-    pub scriptsig_asm:              Option<String>,
-	pub prevout:			        Script,
-    pub witness: 			        Option<Vec<String>>,
-    pub inner_witnessscript_asm:    Option<String>,
-    pub inner_redeemscript_asm:     Option<String>,
-    pub is_coinbase:                bool,
-    pub sequence: 			        u32,
+    pub scriptsig_asm: Option<String>,
+    pub prevout: Script,
+    pub witness: Option<Vec<String>>,
+    pub inner_witnessscript_asm: Option<String>,
+    pub inner_redeemscript_asm: Option<String>,
+    pub is_coinbase: bool,
+    pub sequence: u32,
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct Packet {
-    pub packet_weight:          u64,
-    pub packet_fee_sat:         u64,
-    pub packet_feerate_weight:  u64, // sat/weight_unit
+    pub packet_weight: u64,
+    pub packet_fee_sat: u64,
+    pub packet_feerate_weight: u64, // sat/weight_unit
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct TxMetadata {
-    pub json_path:      Option<String>,
-    pub txid_hex:       String,
-    pub wtxid_hex:      String,
-    pub packet_data:    Packet,
-    pub weight:         u64,
-    pub fee:            u64,
-    pub parents:        Option<Vec<String>>,
+    pub json_path: Option<String>,
+    pub txid_hex: String,
+    pub wtxid_hex: String,
+    pub packet_data: Packet,
+    pub weight: u64,
+    pub fee: u64,
+    pub parents: Option<Vec<String>>,
 }
 
 // main Transaction struct, containing all other transaction (meta-)data
 #[derive(Deserialize, Debug, Clone)]
 pub struct Transaction {
     #[serde(skip_deserializing)]
-    pub meta:           TxMetadata,
-    pub version:        i32,
-    pub locktime:       u32,
-    pub vin:            Vec<TxIn>,
-    pub vout:           Vec<TxOut>,
+    pub meta: TxMetadata,
+    pub version: i32,
+    pub locktime: u32,
+    pub vin: Vec<TxIn>,
+    pub vout: Vec<TxOut>,
 }
 
 impl Transaction {
-    pub fn serialize_all_sequences(&self) -> Vec<u8>{
+    // return Vec<u8> of all sequences in little endian byte format
+    pub fn serialize_all_sequences(&self) -> Vec<u8> {
         let mut all_sequences = Vec::new();
         for input in &self.vin {
             all_sequences.extend(input.sequence.to_le_bytes());
@@ -81,6 +82,7 @@ impl Transaction {
         all_sequences
     }
 
+    // return Vec<u8> of all outpoints of referenced Transaction
     pub fn serialize_all_outpoints(&self) -> Vec<u8> {
         let mut all_outpoints = Vec::new();
         for input in &self.vin {
@@ -89,6 +91,7 @@ impl Transaction {
         all_outpoints
     }
 
+    // return all outputs of Transaction serialized as Vec<u8>
     pub fn serialize_all_outputs(&self) -> Vec<u8> {
         let mut all_outputs = Vec::new();
         for output in &self.vout {
@@ -106,12 +109,12 @@ impl Transaction {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum InputType {
-	P2TR,
-	P2PKH,
-	P2SH,
-	P2WPKH,
-	P2WSH,
-	UNKNOWN(String),
+    P2TR,
+    P2PKH,
+    P2SH,
+    P2WPKH,
+    P2WSH,
+    UNKNOWN(String),
 }
 
 impl Default for InputType {
@@ -123,18 +126,17 @@ impl Default for InputType {
 impl InputType {
     // can be applied on TxIn to set the according InputType
     pub fn fetch_type(txin: &mut TxIn) {
-		let type_string = &txin.prevout.scriptpubkey_type;
-		txin.in_type = match type_string.as_str() {
-			"v1_p2tr" => InputType::P2TR,
-			"v0_p2wpkh" => InputType::P2WPKH,
-			"v0_p2wsh" => InputType::P2WSH,
-			"p2sh" => InputType::P2SH,
-			"p2pkh" => InputType::P2PKH,
-			_ => InputType::UNKNOWN(type_string.to_string()),
-		};
-	}
+        let type_string = &txin.prevout.scriptpubkey_type;
+        txin.in_type = match type_string.as_str() {
+            "v1_p2tr" => InputType::P2TR,
+            "v0_p2wpkh" => InputType::P2WPKH,
+            "v0_p2wsh" => InputType::P2WSH,
+            "p2sh" => InputType::P2SH,
+            "p2pkh" => InputType::P2PKH,
+            _ => InputType::UNKNOWN(type_string.to_string()),
+        };
+    }
 }
-
 
 // Sample Transaction:
 

@@ -1,14 +1,14 @@
-use std::collections::HashMap;
 use crate::parsing::transaction_structs::Transaction;
+use std::collections::HashMap;
 
 struct FeeAndWeight {
-    fee:    u64,
+    fee: u64,
     weight: u64,
 }
 
 // recursively goes to the bottom of a transaction dependency structure and sums up the fee and weight
 // up to the passed transaction which are returned in FeeAndWeight
-fn calc_parents(transactions:& HashMap<String, Transaction>, child_txid: &String) -> FeeAndWeight {
+fn calc_parents(transactions: &HashMap<String, Transaction>, child_txid: &String) -> FeeAndWeight {
     let mut fee_and_weight: FeeAndWeight;
 
     if let Some(child_transaction) = transactions.get(child_txid) {
@@ -22,9 +22,13 @@ fn calc_parents(transactions:& HashMap<String, Transaction>, child_txid: &String
                 let temp_result = calc_parents(transactions, parent);
                 fee_and_weight.fee += temp_result.fee;
                 fee_and_weight.weight += temp_result.weight;
-            };
-        } else { return fee_and_weight };
-    } else { panic!("calc_parent_fees tx not found?"); };
+            }
+        } else {
+            return fee_and_weight;
+        };
+    } else {
+        panic!("calc_parent_fees tx not found?");
+    };
 
     fee_and_weight
 }
@@ -40,5 +44,5 @@ pub fn calculate_packet_weights(transactions: &mut HashMap<String, Transaction>)
         tx.meta.packet_data.packet_weight = temp_result.weight;
 
         tx.meta.packet_data.packet_feerate_weight = temp_result.fee / temp_result.weight;
-    };
+    }
 }

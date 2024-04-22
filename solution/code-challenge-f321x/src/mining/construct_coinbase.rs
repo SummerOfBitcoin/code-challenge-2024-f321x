@@ -1,11 +1,11 @@
+use crate::validation::utils::{double_hash, varint};
 use crate::{parsing::transaction_structs::Transaction, validation::validate_parsing::get_txid};
 use hex_literal::hex as hexlit;
-use crate::validation::utils::{double_hash, varint};
 
 pub struct CoinbaseTxData {
-    pub txid_hex:               String,
-    pub txid_natural_bytes:     Vec<u8>,
-    pub assembled_tx:           Vec<u8>,
+    pub txid_hex: String,
+    pub txid_natural_bytes: Vec<u8>,
+    pub assembled_tx: Vec<u8>,
 }
 
 // calculates the HASH256 merkle root of a Vec of Vec<u8> ([w]txids).
@@ -18,7 +18,6 @@ pub fn get_merkle_root(block_txs: &[Vec<u8>]) -> Vec<u8> {
     }
 
     while merkle_tree.len() > 1 {
-
         if merkle_tree.len() % 2 != 0 {
             let last: Vec<u8> = merkle_tree.last().unwrap().clone();
             merkle_tree.push(last);
@@ -45,19 +44,22 @@ pub fn get_merkle_root(block_txs: &[Vec<u8>]) -> Vec<u8> {
 // calculates the witness root hash and prepends it with the according opcodes
 // ready for use as scriptpubkey returned as Vec<u8>
 fn calc_wtxid_commitment_scriptpubkey(block_txs: &Vec<Transaction>) -> Vec<u8> {
-	let mut txids_bytes: Vec<Vec<u8>> = Vec::new();
+    let mut txids_bytes: Vec<Vec<u8>> = Vec::new();
 
-    txids_bytes.push(hexlit!("0000000000000000000000000000000000000000000000000000000000000000").to_vec());
-	for tx in block_txs {
-		let txid_bytes = hex::decode(&tx.meta.wtxid_hex)
-											.expect("calc_wtxid_commitment_scriptpubkey: Error decoding hex ");
-		let rev_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
-		txids_bytes.push(rev_txid_bytes);
-	}
-	let mut wtxid_merkle_root = get_merkle_root(&txids_bytes);
-    wtxid_merkle_root.extend(hexlit!("0000000000000000000000000000000000000000000000000000000000000000"));
+    txids_bytes
+        .push(hexlit!("0000000000000000000000000000000000000000000000000000000000000000").to_vec());
+    for tx in block_txs {
+        let txid_bytes = hex::decode(&tx.meta.wtxid_hex)
+            .expect("calc_wtxid_commitment_scriptpubkey: Error decoding hex ");
+        let rev_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
+        txids_bytes.push(rev_txid_bytes);
+    }
+    let mut wtxid_merkle_root = get_merkle_root(&txids_bytes);
+    wtxid_merkle_root.extend(hexlit!(
+        "0000000000000000000000000000000000000000000000000000000000000000"
+    ));
     let witness_commitment = double_hash(&wtxid_merkle_root);
-    let mut witness_commitment_scriptpubkey = hexlit!("6a24aa21a9ed").to_vec();  // OP_RETURN + len + witness code
+    let mut witness_commitment_scriptpubkey = hexlit!("6a24aa21a9ed").to_vec(); // OP_RETURN + len + witness code
     witness_commitment_scriptpubkey.extend(&witness_commitment);
     witness_commitment_scriptpubkey
 }
@@ -76,33 +78,39 @@ fn count_fees(block_txs: &Vec<Transaction>) -> u64 {
 // and the witness reserved value.
 fn serialize_coinbase_transaction(block_txs: &Vec<Transaction>, is_segwit: bool) -> Vec<u8> {
     let mut coinbase_transaction: Vec<u8> = Vec::new();
-	let wtxid_commitment_scriptpubkey: Vec<u8> = calc_wtxid_commitment_scriptpubkey(block_txs);
+    let wtxid_commitment_scriptpubkey: Vec<u8> = calc_wtxid_commitment_scriptpubkey(block_txs);
     let reward: u64 = count_fees(block_txs) + 625000000;
 
     coinbase_transaction.extend(hexlit!("01000000")); // version
     if is_segwit {
-        coinbase_transaction.extend(hexlit!("0001"));  // marker + flag
+        coinbase_transaction.extend(hexlit!("0001")); // marker + flag
     }
-    coinbase_transaction.extend(hexlit!("010000000000000000000000000000000000000000000000000000000000000000ffffffff")); // input count + input + index
-    let mut scriptsig = varint(varint(839653).len() as u128);  //pushbytes len blockheight
-    scriptsig.extend(varint(839653));  // blockheight
-    scriptsig.extend(hexlit!("1043797068657270756E6B467574757265"));  // this is 16 + secret ascii message :)
+    coinbase_transaction.extend(hexlit!(
+        "010000000000000000000000000000000000000000000000000000000000000000ffffffff"
+    )); // input count + input + index
+    let mut scriptsig = varint(varint(839653).len() as u128); //pushbytes len blockheight
+    scriptsig.extend(varint(839653)); // blockheight
+    scriptsig.extend(hexlit!("1043797068657270756E6B467574757265")); // this is 16 + secret ascii message :)
     coinbase_transaction.extend(varint(scriptsig.len() as u128));
     coinbase_transaction.extend(scriptsig);
     coinbase_transaction.extend(hexlit!("ffffffff")); // sequence
     coinbase_transaction.extend(hexlit!("02")); // 2 outputs (reward and witness commitment op_return)
     coinbase_transaction.extend(reward.to_le_bytes());
-    coinbase_transaction.extend(varint(hexlit!("001435f6de260c9f3bdee47524c473a6016c0c055cb9").len() as u128)); // reward p2wpkh scriptpubkey
+    coinbase_transaction.extend(varint(
+        hexlit!("001435f6de260c9f3bdee47524c473a6016c0c055cb9").len() as u128,
+    )); // reward p2wpkh scriptpubkey
     coinbase_transaction.extend(hexlit!("001435f6de260c9f3bdee47524c473a6016c0c055cb9"));
     coinbase_transaction.extend(hexlit!("0000000000000000")); // witness amount
     coinbase_transaction.extend(varint(wtxid_commitment_scriptpubkey.len() as u128)); // len wtxid commitment
     coinbase_transaction.extend(wtxid_commitment_scriptpubkey);
     // amnt witness stack items + len witness reserved value + value
     if is_segwit {
-        coinbase_transaction.extend(hexlit!("01200000000000000000000000000000000000000000000000000000000000000000"));
+        coinbase_transaction.extend(hexlit!(
+            "01200000000000000000000000000000000000000000000000000000000000000000"
+        ));
     }
     coinbase_transaction.extend(hexlit!("00000000")); // locktime
-	coinbase_transaction
+    coinbase_transaction
 }
 
 // entry function to assemble the coinbase transaction which is returned as CoinbasTxData struct
@@ -116,4 +124,3 @@ pub fn assemble_coinbase_transaction(block_txs: &Vec<Transaction>) -> CoinbaseTx
         assembled_tx: coinbase_tx_witness,
     }
 }
-
