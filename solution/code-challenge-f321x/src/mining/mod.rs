@@ -20,7 +20,7 @@ pub struct Block {
     pub txids_hex: Vec<String>,
 }
 
-// hex encodes header andcoinbase tx and creates a Vec<hex txid String> including
+// hex encodes header and coinbase tx and creates a Vec<hex txid String> including
 // the coinbase txid and returns it as Block struct for use in writing the output.txt
 fn return_block(
     block_header_bytes: &[u8],
