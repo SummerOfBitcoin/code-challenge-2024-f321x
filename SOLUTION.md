@@ -1,13 +1,16 @@
-<!-- # Summer of Bitcoin 2024 - Felix -->
+# Summer of Bitcoin 2024 - Felix
 In the following document i will explain my solution to the SoB 2024 assignment.
 
-## Design Approach
+## Design Approach<p style="color:grey;font-size:0.4em;margin-top:0;margin-bottom:0;">-> the story</p>
 
-The program is structured in three main modules:
+The program is structured in three main modules and a directory of test scripts:
 
 1. Parsing
 2. Validation
 3. Block construction
+4. Test scripts
+
+I decided to implement the assignment in the Rust programming language because of its known benefits and usage in many bitcoin open source projects, and also because i wanted to learn the language.
 
 ### <u>1. Parsing</u>
 
@@ -45,33 +48,102 @@ The P2PKH verification function will assemble the validation script from the tra
 The P2WPKH verification function assembles the transaction commitment accoding to BIP143 and verifies the commitment HASH256 against the witness as well as the ScriptPubKey-pubkey against the HASH160 of the witness pubkey.
 
 
-### <u>3. Block construction</u>
+### <u>3. Block construction ("mining")</u>
 
+The block construction module expects any amount of valid transactions and will construct a block consisting of header, coinbase transactions and a sorted constellation of transaction ids.
 
+The block construction module will aim to maximise fee revenue respecting the limited block size of 4 000 000 weight units.
 
+Block construction happens in this order:
 
+1. Assigning parents to transactions
+2. Calculating packet weights of transactions with their ancestors
+3. Sorting transactions aiming at maximum fee revenue
+4. Removing transactions with lowest feerate to respect block size limit
+5. Assembly of coinbase transaction
+	* including construction of wtxid commitment
+6. Assembly of block header
+	* including hashing to reach target difficulty (the "mining")
 
+After the block data is determined it will be passed to a function storing it in a output.txt file formatted according to the subject requirements.
 
+### <u>4. Test scripts</u>
 
+In the process of writing the program i also used two python scripts to verify some results of the implementation.
 
+#### test_tx_assembly.py
+Contains some loose functions to construct a standard p2wpkh transaction commitment.
 
+#### validate_wtxids.py
+Script to verify the wtxid construction of my program. Takes a file containing my constructed txids and wtxids and compares them with the correct wtxids pulled from a self hosted mempool.space API. If a wrong wtxid is encountered i can manually debug to find the differences.
 
+## Implementation details<p style="color:grey;font-size:0.4em;margin-top:0;margin-bottom:0;">-> the juice</p>
+This section will go trough the program in the same order as the previous one (order of execution) and explain the implementation in more detail assuming understanding of the previous chapter.
 
+### Global
+The *Transaction* struct is used to store the transaction data parsed out of the json files by the parsing module.
 
+```
+struct Transaction
+    meta: 		MetadataStruct,
+    version: 	4 byte integer,
+    locktime: 	4 byte unsigned integer,
+    vins: 		List<TxIn struct>,
+    vouts: 		List<TxOut struct>,
+```
+The *Transaction* struct and the contained sub-structs are defined in **parsing/transaction_structs.rs**.
+Most of the runtime the *Transaction* structs are stored and passed between functions in a Vec<_Transaction_>.
 
+Variables contained only in some JSON files are Option<_Some_> variables and some variables are complemented later once available.
 
+The _MetadataStruct_ contained in the Transaction struct contains the following useful transaction metadata:
+```
+struct MetadataStruct
+    json_path: 		Option<absolute path String>,
+    txid_hex: 		String,
+    wtxid_hex: 		String,
+    packet_data: 	Packet,
+    weight: 		u64,
+    fee: 			u64,
+    parents: 		Option<Vec<hex txids>>,
+```
 
+### <u>1. Parsing</u>
+```
+├── parse_transactions_from_dir(directory_path: &str)
+│   │
+│   └── fs::read_dir(directory_path)
+│      └── Iterate over files in the directory
+│          │
+│          └── parse_file_content(file_to_load: fs::DirEntry)
+│              │
+│              ├── Check file extension
+│              │   └── If not "json", continue to next file
+│              │
+│              ├── fs::read_to_string(file_path_buf)
+│              │   └── Read file content into a String
+│              │
+│              └── parse_json(&file_content [ref to Sting]) -> using serde json crate
+│                  │
+│                  ├── from_str::<Transaction>(str_content)
+│                  │   └── Deserialize JSON into Transaction struct
+│                  │
+│                  ├── If deserialization successful
+│                  │   ├── Update tx.meta.json_path to absolute json path
+│                  │   └── Set input types for each tx.vin
+│                  │
+│                  └── If deserialization fails
+│                      └── Panic with error message -> Invalid JSON file
+│
+└── Return Vec<Transaction> (parsed transactions)
+```
+The Vec<_Transaction_> returned by the parsing module is now passed on to the validation module to verify the transactions and sort out invalid ones to be able to construct a valid block.
 
-
-
-
-
+### <u>2. Validation</u>
 
 
 ## Document your work
 
-Apart from the code, you must also publish a `SOLUTION.md` file explaining your solution in the following format:
-- **Design Approach:** Describe the approach you took to design your block construction program, explain all the key concepts of creating a valid block.
 - **Implementation Details:** Provide pseudo code of your implementation, including sequence of logic, algorithms and variables used etc.
 - **Results and Performance:** Present the results of your solution, and analyze the efficiency of your solution.
 - **Conclusion:** Discuss any insights gained from solving the problem, and outline potential areas for future improvement or research. Include a list of references or resources consulted during the problem-solving process.
