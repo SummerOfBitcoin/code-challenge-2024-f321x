@@ -139,7 +139,178 @@ struct MetadataStruct
 ```
 The Vec<_Transaction_> returned by the parsing module is now passed on to the validation module to verify the transactions and sort out invalid ones to be able to construct a valid block.
 
-### <u>2. Validation</u>
+### <u>2.1 Transaction validation - Sanity checks</u>
+
+#### ***Input and output values and count***
+
+```fn validate_values_and_set_fee(tx: &mut Transaction) -> bool```
+
+Validates that the transaction has higher sum of input values than output values (no "inflation"), also checks if the transaction even has inputs and outputs and that the values are possible (below 21m bitcoin).
+
+If the all checks pass the fee will be stored in the passed mutable _Transaction_ reference.
+
+#### ***Parsing validation***
+
+```fn validate_txid_hash_filename(tx: &mut Transaction) -> bool ```
+
+Compares the SHA256 hash of the TXID against the filename of the JSON file to verify correct parsing of the data.
+
+To get the TXID the transaction has to be byte serialized without witness parts (no marker, flag and witnesses) in the specified structure below:
+
+1. Version [4 bytes LE]
+2. (WTXID: 1 byte marker & 1 byte flag)
+3. Input count [varint LE]
+4. All serialized inputs each consisting of:
+    1. Outpoint txid in natural bytes (txid referenced in input)
+    2. Outpoint index [4 bytes LE]
+    3. Scriptsig length [varint LE bytes]
+    4. Scriptsig bytes
+    5. Sequence bytes [4 bytes LE]
+5. Output count [varint LE]
+6. All serialized outputs each consisting of:
+    1. Value in satoshi [8 bytes LE]
+    2. Length of output scriptpubkey [varint LE bytes]
+    3. Output scriptpubkey bytes
+7. (WTXID: serialized witnesses)
+8. Locktime [4 bytes LE]
+
+Afterwards this bytes stored in a Vec<_u8_> can be double SHA256 hashed and compared with the filenames, if they are unequal there would be some problem in the transaction parsing or serialization.
+
+The functions in validate_parsing.rs will also calculate the WTXID due to the similar logic and store it alongside the TXID and store it in the mutable _Transaction_ reference for later use.
+
+#### ***Transaction weight***
+
+``` fn validate_and_set_weight(tx: &mut Transaction) -> bool ```
+
+Weight units define the "size" of the transaction used later for calculation of the feerate and priorization of the transaction by the miner. Weight units discount some parts of the transaction so it can't be compared to bytes.
+
+This are the multipliers used when calculating the transaction weight from its byte size:
+
+| Field   | Multiplier |
+|---------|------------|
+| version | x4         |
+| marker  | x1         |
+| flag    | x1         |
+| input   | x4         |
+| output  | x4         |
+| witness | x1         |
+| locktime| x4         |
+
+Calculating the weight is done by decoding all parts stored in the _Transaction_ into bytes and calculating the sum of all parts each multiplied by its weight multiplier. If it is a segwit transaction marker, flag and witness are included in the calculation too as they are stored on the blockchain as well.
+
+As part of the sanity check the function *validate_and_set_weight(tx: &mut Transaction)* will check if the weight of the transaction is above 4 000 000 WU (- 320 WU for the block header & - 400 WU reserve for the coinbase transaction) which would be too large to be included in any block.
+
+Afterwards the transaction weight will be stored in the mutable _Transaction_ reference for later use.
+
+#### ***Transaction feerate***
+``` fn validate_feerate(tx: &Transaction) -> bool ```
+
+The last simple sanity check is now able to calculate the feerate from the previously calculated weight and transaction fee. The **Bitcoin Core** implementation of bitcoin will only relay transactions with a feerate above 1 satoshi per vbyte. A virtual byte is another unit of size and can be calculated by dividing the weight by 4.
+
+```
+vbyte_size = tx.meta.weight / 4
+feerate = tx.meta.fee / vbyte_size
+    if feerate < 1
+        return false
+return true
+```
+
+Although transactions with a feerate below 1 sat/vbyte are not strictly invalid they would have to be mined out of band by a miner as they won't be stored in the mempool so i will consider them invalid in the program.
+
+### <u>2.2 Transaction validation - Signature and Script verification</u>
+Out of the available transaction types in the given mempool i decided to implement verification for P2PKH and P2WPKH and consider other transaction types invalid.
+
+To verify contained scripts and to learn the function of *Bitcoin Script*, the "language" used to specify and satisfy the spending conditions of transaction outputs i implemented a *Script* verification "engine" located in validation/script.rs.
+
+The function *evaluate_script()* goes trough the script byte by byte and calls the according function if an opcode is encountered. The stack is implemented as a VecDeque<_Vec<*u8*>_> data structure.
+```
+fn evaluate_script(
+    script: Vec<u8>,
+    txin: &TxIn,
+    tx: &Transaction, ) -> Result<(), Box<dyn Error>>
+```
+This are the opcodes supported by the function:
+
+| Hex | OP_NAME | Function Call |
+|-----|---------|---------------|
+| 0xa8 | OP_SHA256 | `stack.push_back(hash_sha256(&last))` |
+| 0xa9 | OP_HASH160 | `stack.push_back(hash160(&last))` |
+| 0x75 | OP_DROP | `stack.pop_back()` |
+| 0x7c | OP_SWAP | `op_swap(&mut stack)?` |
+| 0x00 | OP_0 | `stack.push_back(Vec::new())` |
+| 0x76 | OP_DUP | `stack.push_back(last.clone())` |
+| 0x87 | OP_EQUAL | `op_equal(&mut stack)?` |
+| 0x7b | OP_ROT | `op_rot(&mut stack)?` |
+| 0x82 | OP_SIZE | `op_size(&mut stack)?` |
+| 0x78 | OP_OVER | `op_over(&mut stack)?` |
+| 0xa0 | OP_GREATERTHAN | `op_greaterthan(&mut stack)?` |
+| 0x88 | OP_EQUALVERIFY | `op_equalverify(&mut stack)?` |
+| 0x73 | OP_IFDUP | `op_ifdup(&mut stack)?` |
+| 0xb2 | OP_CHECKSEQUENCEVERIFY | `op_checksequenceverify(&mut stack, txin, tx)?` |
+| 0xb1 | OP_CHECKLOCKTIMEVERIFY | `op_checklocktimeverify(&mut stack, tx, txin)?` |
+| 0xac | OP_CHECKSIG | `op_checksig(&mut stack, tx, txin)?` |
+| 0x74 | OP_DEPTH | `op_depth(&mut stack)?` |
+| 0xad | OP_CHECKSIGVERIFY | `op_checksig(&mut stack, tx, txin)?; op_verify(&mut stack)?` |
+| 0x51..=0x60 | OP_PUSHNUM (1-16) | `op_pushnum(&mut stack, opcode)?` |
+| 0x4f | OP_1NEGATE | `stack.push_back(vec![255])` |
+| 0x01..=0x4b | OP_PUSHBYTES | `op_pushbytes(&mut stack, &mut index, &script)?` |
+| 0x4c | OP_PUSHDATA1 | `op_pushdata(&mut stack, 1, &mut index, &script)?` |
+| 0x4d | OP_PUSHDATA2 | `op_pushdata(&mut stack, 2, &mut index, &script)?` |
+| 0x4e | OP_PUSHDATA4 | `op_pushdata(&mut stack, 4, &mut index, &script)?` |
+| 0xae | OP_CHECKMULTISIG | `op_checkmultisig(&mut stack, tx, txin)?` |
+
+
+#### P2PKH
+```
+fn verify_p2pkh(tx: &Transaction, txin: &TxIn) -> ValidationResult
+```
+When the main verifying loop detects the transaction input type as P2PKH the function above will assemble a script from the transaction input data with a structure similar to this (but in bytes):
+```
+scriptSig part
+------------
+OP_PUSHBYTES
+SIGNATURE
+OP_PUSHBYTES
+PUBLIC_KEY
+------------
++
+ScriptPubKey part
+-------------------------
+OP_DUP
+OP_HASH160
+OP_PUSHBYTES_20
+PUBLIC KEY HASH (HASH160)
+OP_EQUALVERIFY
+OP_CHECKSIG
+------------------------
+```
+
+The script will then be passed to the script verification function which will return the result.
+
+If any transaction input is invalid the transaction will be considered invalid.
+
+#### P2WPKH
+My P2WPKH verification is more hardcoded as i implemented the Script engine afterwards and could be refactored to use the script engine as further improvement.
+
+I first assemble the commitment to generate HASH256(commitment) message for signatue verification according to the BIP143 serialization specification:
+
+1. Version [4-byte little endian]
+2. hashPrevouts [*HASH256(tx.serialize_all_outpoints())*]
+3. hashSequence [*HASH256(tx.serialize_all_sequences())*]
+4. outpoint [32-byte outpoint txid natural byte order + 4-byte little endian index]
+5. scriptCode of the input (byte serialized scriptcode)
+6. value of the output spent by this input (8-byte little endian)
+7. Sequence of the input (4-byte little endian)
+8. hashOutputs [*HASH256(tx.serialize_all_outputs())*]
+9. Locktime of the transaction (4-byte little endian)
+10. sighash type of the signature [4-byte little endian, *SIGHASH_ALL hardcoded*]
+
+Then the program compares if HASH160(witness public key) is equal to the public key encoded in the ScriptPubKey. If so the commitment hash is verified against the signature and public key using ecdsa on secp256k1 (imported as rust crate).
+
+
+#### All transaction considered invalid according to the previous tests will be stored be stored in a HashSet in form of their hex txid. Afterwards all Transactions contained in the HashSet will be removed from the Vec<*Transaction*> of parsed transactions returning a Vec of valid transactions only.
+
+### <u>3. Block construction</u>
 
 
 ## Document your work

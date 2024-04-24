@@ -447,7 +447,6 @@ fn op_checkmultisig(
                 match verify_sig_op_checksig(&message, &pubkey, &signature) {
                     Ok(_) => {
                         number_of_signatures -= 1;
-                        println!("VALID SIGNATURE OPCHECKMULTISIG!");
                     }
                     Err(err) => {
                         println!("{}", err);

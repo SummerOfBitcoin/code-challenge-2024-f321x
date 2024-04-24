@@ -77,7 +77,7 @@ fn calculate_weight(tx: &Transaction) -> u32 {
 // returns: true if valid
 pub fn validate_and_set_weight(tx: &mut Transaction) -> bool {
     let weight = calculate_weight(tx);
-    if weight > (4000000 - (1100 + 320)) {
+    if weight > (4000000 - (400 + 320)) {
         // leave some space for header and coinbase tx
         return false;
     };
