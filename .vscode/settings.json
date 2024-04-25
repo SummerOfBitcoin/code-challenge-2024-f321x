@@ -1,6 +1,0 @@
-{
-	"editor.defaultFormatter": "rust-lang.rust-analyzer",
-	"files.exclude": {
-		"logseq/*": true
-	}
-}

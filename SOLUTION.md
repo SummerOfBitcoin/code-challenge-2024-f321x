@@ -520,9 +520,9 @@ Searching for a txid below the target difficulty of
 ```0x00000ffff0000000000000000000000000000000000000000000000000000000```
 takes **~1250 ms** on average.
 
-## <u>Conclusion</u>
+## Conclusion
 
-### Insights
+### <u>Insights</u>
 While working on the assignment i could gain many insights. Bitcoin is a very sophisticated project with so many details to each supposedly small part. Each little functionality has been thought about on how to optimize it down to the single bit. This makes bitcoin a very interesting project to work on as its possible to learn a ton of sophisticated concepts. But it also requires a lot of patience and view for the detail. One value in big endian? Completely different hashes :)
 
 I really enjoyed the assignment and learned a ton about the technical details of bitcoin, to the point of enabling me to productively implement parts of it. This was a rewarding experience.
@@ -531,7 +531,7 @@ It was also my first bigger project written in Rust and seeing the large amounts
 
 Also immense respect to Satoshi for implementing all of this starting just from an idea, without any ressources, this must have been a very long journey.
 
-### Further improvements
+### <u>Further improvements</u>
 Due to the limited time and me learning many new concepts in the process of writing the program there are many possible improvements:
 
 
@@ -559,7 +559,7 @@ Even tough i value simple code and avoid duplicate code there is some code that 
 #### Making it open source
 Open sourcing the program could attract contributors to improve the code with their knowledge and enable them to utilize the code in their software providing more value to more users.
 
-### Resources
+### <u>Resources</u>
 
 I used a lot of ressources to understand the concepts and how to implement them. These are the ressources that helped me the most:
 * [learn me a bitcoin](https://learnmeabitcoin.com)
