@@ -1,7 +1,7 @@
 # Summer of Bitcoin 2024 - Felix
 In the following document i will explain my solution to the SoB 2024 assignment.
 
-## Design Approach<p style="color:grey;font-size:0.4em;margin-top:0;margin-bottom:0;">-> the story</p>
+## Design Approach
 
 The program is structured in three main modules and a directory of test scripts:
 
@@ -77,7 +77,7 @@ Contains some loose functions to construct a standard p2wpkh transaction commitm
 #### validate_wtxids.py
 Script to verify the wtxid construction of my program. Takes a file containing my constructed txids and wtxids and compares them with the correct wtxids pulled from a self hosted mempool.space API. If a wrong wtxid is encountered i can manually debug to find the differences.
 
-## Implementation details<p style="color:grey;font-size:0.4em;margin-top:0;margin-bottom:0;">-> the juice</p>
+## Implementation details
 This section will go trough the program in the same order as the previous one (order of execution) and explain the implementation in more detail assuming understanding of the previous chapter.
 
 ### Global
