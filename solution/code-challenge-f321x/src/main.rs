@@ -54,7 +54,7 @@ fn main() {
 
     // stores all transactions that are not invalid in a HashMap (TXID(hex String), Transaction Struct)
     let mut valid_transactions =
-        remove_invalid_transactions(parsed_transactions, invalid_transactions);
+    remove_invalid_transactions(parsed_transactions, invalid_transactions);
 
     // returns a Block struckt containing header, coinbase and final transaction list
     let block: Block = mine_block(&mut valid_transactions);

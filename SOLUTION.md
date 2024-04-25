@@ -308,13 +308,265 @@ I first assemble the commitment to generate HASH256(commitment) message for sign
 Then the program compares if HASH160(witness public key) is equal to the public key encoded in the ScriptPubKey. If so the commitment hash is verified against the signature and public key using ecdsa on secp256k1 (imported as rust crate).
 
 
-#### All transaction considered invalid according to the previous tests will be stored be stored in a HashSet in form of their hex txid. Afterwards all Transactions contained in the HashSet will be removed from the Vec<*Transaction*> of parsed transactions returning a Vec of valid transactions only.
+#### All transaction considered invalid according to the previous tests will be stored be stored in a HashSet in form of their hex txid. Afterwards all Transactions contained in the HashSet will be removed from the Vec<*Transaction*> of parsed transactions and the remaining, valid *Transaction* structs will be stored in a HashMap<TXID hex String, *Transaction*> for block construction.
 
 ### <u>3. Block construction</u>
 
 
-## Document your work
+#### Assigning parents to transactions
 
-- **Implementation Details:** Provide pseudo code of your implementation, including sequence of logic, algorithms and variables used etc.
-- **Results and Performance:** Present the results of your solution, and analyze the efficiency of your solution.
-- **Conclusion:** Discuss any insights gained from solving the problem, and outline potential areas for future improvement or research. Include a list of references or resources consulted during the problem-solving process.
+```assign_mempool_parents(&mut txid_tx_map)```
+
+This function will traverse trough each input in each transaction in txid_tx_map and create, for each transaction, a Vec<*String*> of hex txids of the referenced outpoints contained in the mempool (the parents). This Vec<*hex txid String*> is then stored in the value of txid in txid_tx_map (*Transaction.meta.parents*).
+
+#### Calculating packet weights of transactions with their ancestors
+``` calculate_packet_weights(&mut txid_tx_map)```
+
+The function calculates the package weight for each transaction by recursively going to the bottom of the ancestor dependence and summing up fees and weight to each calling txid with using the following logic:
+
+```
+fn calc_parents(all_transactions, child_txid_hex_string) -> FeeAndWeight:
+
+    new struct fee_and_weight = {
+        fee: child_transaction.meta.fee,
+        weight: child_transaction.meta.weight,
+    }
+
+    if child transaction has parents in mempool:
+        for parent in parents_txids
+            let temp_result = calc_parents(transactions, parent);
+            fee_and_weight.fee += temp_result.fee;
+            fee_and_weight.weight += temp_result.weight;
+
+    return fee_and_weight
+```
+
+After the packet weight and fees have been calculated the packet feerate is calculated out of them:
+```
+tx.meta.packet_data.packet_feerate_weight = previous.fee / previous.weight;
+```
+
+Now that we have the packet feerate for each transaction we are able to sort them by their profitability more accurate.
+
+#### Sorting transactions
+```fn sort_transactions(txid_tx_map) -> Vec<Transaction>```
+
+The program now first sorts all transactions by their packet feerate, then will push the parents of the transactions in front of their children. This way it can be ensured that the block never contains a child before its parents.
+
+Sorting happens with standard rust functions:
+```
+transactions.sort_by(|a, b: &&Transaction| {
+        b.meta
+            .packet_data
+            .packet_feerate_weight
+            .cmp(&a.meta.packet_data.packet_feerate_weight)
+    })
+```
+
+Pushing the parents in front of the children is implemented as a loop that will terminate as soon as no parent has been moved anymore after a full iteration trough the Vec<*Transaction*>.
+
+#### Removing transactions with lowest feerate to respect block size limit
+```
+fn cut_size(sorted_transactions: Vec<Transaction>) -> Vec<Transaction>
+```
+After we have created a Vec<*Transaction*> sorted from high to low revenue transactions it is neccessary to remove enough transactions to respect the block size limit of 4 000 000 weight units (minus header and coinbase tx reserve).
+
+This is implemented by pushing the Transactions from *sorted_transactions* to a new Vec "block" and simultaneously adding their tx.meta.weight to a sum until the hardcoded limit of 3 992 000 is reached. Afterwards the new Vec<*Transaction*> is returned safe to be fully included in a block.
+
+#### Assembly of coinbase transaction
+```
+fn assemble_coinbase_transaction(block_txs: &Vec<Transaction>) -> CoinbaseTxData
+```
+
+The coinbase transaction is the first transaction in a block, constructed by the miner to reward himself with the current block subsidy and transaction fees of the included transactions. The coinbase transaction also contains a commitment to all witnesses in the transaction by including a modified merkle root hash of all included wTXIDs as OP_RETURN output in the coinbase transaction.
+
+The coinbase transaction will be assembled two times, once with witness values (witness reserved value, marker and flag) for inclusion of the raw transaction in the second row of the output.txt. The coinbase transaction without witness values will be used to generate its TXID for use in the blockheader merkle tree.
+
+The coinbase transaction has the following byte structure:
+
+1. Version [4 bytes, LE]
+2. (if wTXID: marker + flag, each 1 byte)
+3. Input count [1 input, 1 byte, LE]
+4. Input [always empty TXID, 32 zero bytes]
+5. Input amount [always maximum value: 0xffffffff]
+6. Scriptsig byte length [varint, LE]
+7. Scriptsig -> has to contain current block height in LE, random data can be added afterwards, for example an extra nonce or a miner tag
+8. Sequence [0xffffffff]
+9. Output count [1 byte LE, reward & wtxid commitment]
+10. Reward amount, all feed + block reward in satoshi [8 bytes, LE]
+11. Locking script size [varint, LE]
+12. Reward payout locking script, i used a P2WPKH scriptPubKey
+13. wTXID OP_RETURN commitment amount [8 bytes of 0]
+14. wTXID commitment script lenght [1 byte, 0x26]
+15. the wTXID commitment consisting of the following structure:
+```OP_RETURN OP_PUSHBYTES_36 commitment_header_(aa21a9ed)  wTXID_COMMITMENT```
+16. Stack item count [1 item, 1 byte, the witness reserved value]
+17. Size of the witness reserved value [0x20]
+18. Witness reserved value [32 null bytes]
+19. Locktime [4 null bytes]
+
+The wTXID merkle root is calculated as a HASH256 merkle root of all wTXIDs (the txids of the transactions including the witness part). The coinbase transaction is included as empty txid (32 null bytes) to prevent circular reference.
+The wTXID commitment used in the OP_RETURN output is the HASH256 of the wtxid merkle root concatenated with the witness reserved value (32 null bytes).
+
+Now we return the following result to the main block construction function:
+```
+struct CoinbaseTxData
+    txid_hex:           String -> first txid in output.txt (3rd line)
+    txid_natural_bytes: bytes -> for block header merkle root
+    full_assembled_tx:  bytes -> second line in output.txt
+```
+
+#### Assembly of the block header
+```
+fn construct_header(sorted_block_transactions: &Vec<Transaction>,
+                    coinbase_tx: &CoinbaseTxData)
+                    -> Vec<u8>
+```
+
+The block header is the first data contained in the block. It links the block to the previous block by referencing the hash of the previous blocks header. The block commits to all contained transactions by including a merkle root of all TXIDs and is in itself the proof of the work (energy consumption) utilized to construct it.
+
+A regular block header is byte serialized in the following structure:
+1. **Version**, can also be used as bitfield to signal readyness for softforks [usually **0x20000000**]
+2. **Previous block** hash [32 byte, natural order]
+3. HASH256 **merkle root** of all contained transactions (txids), including the coinbase tx [32 byte, natural order]
+4. Current **unix time** [4 bytes, LE]
+5. **Target bits**, more compact representation of the Proof of Work target required for this block (current difficulty epoch). [4 bytes]
+6. **Nonce** [4 bytes, LE]
+
+The process of finding a block (header) hash below the required difficulty target happens in the following way:
+```
+loop {
+    current_hash = HASH256(first header bytes + current nonce bytes)
+    if BigUint(current_hash) < BigUint(Target difficulty)
+        break and return Nonce
+    else
+        nonce + 1
+}
+```
+The nonce is being increased by one until the HASH256 of the block header with the tested nonce is below the target. The target for the SoB assignment was defined as: ```0x0000ffff00000000000000000000000000000000000000000000000000000000```
+
+The smaller the target the longer it takes to find a valid hash, making it more difficult to find a valid block. The bitcoin network automatically adjusts the difficulty to keep a block interval around 10 minutes.
+
+The block construction part now returns the block data in form of a struct back to the main function for exporting:
+```
+struct Block
+    header_hex:      String
+    coinbase_tx_hex: String
+    txids_hex:       Vec<String>
+```
+
+### <u>Output</u>
+```
+output_block(mined_block: &Block, output_path: &str)
+```
+
+Now that the program has a sorted list of valid transaction ids, a block header and a coinbase transaction commiting to the transaction list it can construct the output.txt required by the subject.
+
+This is done using the rust std functions ```File::create(output_path)``` and
+```writeln!(output_file, "{}", mined_block.data)```.
+
+The complete output.txt file will be created in the root of the repository :)
+
+## Results and Performance
+
+### Results
+
+Of the given **8131** transactions the program is able to construct a block including around **3200** valid transactions containing **fees of ~20 260 000 satoshi** and a **weight of ~3 950 000 WU**. The actual values are subject to smaller variance due to the non-deterministic nature of data structures i used.
+
+This is around **99% block space utilization** and **20m satoshi** additional revenue on top of the block reward.
+
+### Performance metrics
+
+The measurements were taken on the following hardware:
+```
+iMac 20.1
+
+Processor Name:	            6-Core Intel Core i5
+Processor Speed:	        3.1 GHz
+Number of Processors:	    1
+Total Number of Cores:	    6
+L2 Cache (per Core):	    256 KB
+L3 Cache:	                12 MB
+Hyper-Threading Technology:	Enabled
+Memory:	                    8 GB
+```
+
+The program has been compiled in release mode using the following settings:
+```
+[profile.release]
+lto = true
+strip = true
+```
+
+Due to the system running in some kind of university virtualization system the actual speed is way lower than the specs seem to let one expect.
+
+All measurements were taken on the given mempool transaction set.
+
+#### Runtime
+The full program runtime from loading transaction files to exporting the output.txt is ~ 41000 ms (41 seconds).
+
+#### Loading transaction files
+Running the program the first time parsing the json files into the Vec<*Transaction*> takes **~27000 ms** (27 sec). Running the program again it will only take **~200ms** due to caching done by the operating system.
+
+#### Validating transactions
+
+Transaction validation and creation of the new HashMap containing only valid transactions takes **~4000 ms** (4 sec).
+
+#### Full block assembly
+Assembling all data for the block (coinbase, header and sorting the transactions) takes **~10000 ms** (10 sec).
+
+#### Hashing the header (nonce search)
+Searching for a txid below the target difficulty of
+```0x00000ffff0000000000000000000000000000000000000000000000000000000```
+takes **~1250 ms** on average.
+
+## <u>Conclusion</u>
+
+### Insights
+While working on the assignment i could gain many insights. Bitcoin is a very sophisticated project with so many details to each supposedly small part. Each little functionality has been thought about on how to optimize it down to the single bit. This makes bitcoin a very interesting project to work on as its possible to learn a ton of sophisticated concepts. But it also requires a lot of patience and view for the detail. One value in big endian? Completely different hashes :)
+
+I really enjoyed the assignment and learned a ton about the technical details of bitcoin, to the point of enabling me to productively implement parts of it. This was a rewarding experience.
+
+It was also my first bigger project written in Rust and seeing the large amounts of serialization, deserialization, hashing and calculating i understand why many bitcoin projects can profit of the safety and performance of the language.
+
+Also immense respect to Satoshi for implementing all of this starting just from an idea, without any ressources, this must have been a very long journey.
+
+### Further improvements
+Due to the limited time and me learning many new concepts in the process of writing the program there are many possible improvements:
+
+
+#### Test coverage
+A possible improvement to make the program more safe and defined would be to implement tests for each relevant function by utilizing Rusts good testing functionality.
+
+#### Using more rustacean syntax
+Due to me coming from C and Python the coding style is probably looking a bit functional and could utilize more of Rusts features like Traits, Generics and more suitable data structures.
+
+#### Performace improvements
+To make the program more performant it could be optimized to make more use of references instead of cloning data. It could also be benchmarked with a profiler to see functions causing performance bottlenecks to be improved.
+
+#### Implement more input types and bitcoin functionality
+To be able to process more different transaction types for higher fee revenue and better block space utilization it would be neccessary to implement more input types like P2TR, P2WSH and P2SH. To do this it would be neccessary to implement some more opcodes like OP_IF in the script engine. It would also be possible to implement more sighash types besides SIGHASH_ALL to be able to verify these transactions too.
+
+#### Make the program output deterministic
+Currently there is a small variance in block creation even tough the input data provided is constant. To make this deterministic would make the program more predictable and allow for more accurate benchmarks. To do this it would be neccessary to change some data types from hash based ordering to Vectors and logic handling the transactions.
+
+#### Combine functions
+Even tough i value simple code and avoid duplicate code there is some code that could be combined to make it easier to read and simpler. The P2WPKH script verification could for example be refactored to use the script verification module which would just need a new function to assemble a TX commitment according to BIP143 in order to verify P2WPKH inputs.
+
+#### Making it open source
+Open sourcing the program could attract contributors to improve the code with their knowledge and enable them to utilize the code in their software providing more value to more users.
+
+### Resources
+
+I used a lot of ressources to understand the concepts and how to implement them. These are the ressources that helped me the most:
+* [learn me a bitcoin](https://learnmeabitcoin.com)
+* [Bitcoin Stackexchange](https://bitcoin.stackexchange.com/)
+* [BIP 143](https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki)
+* [Bitcoin Wiki](https://en.bitcoin.it/wiki)
+* [Mastering Bitcoin Rev. 3](https://github.com/bitcoinbook/bitcoinbook)
+* [Grokking Bitcoin](https://www.manning.com/books/grokking-bitcoin)
+* [BIP 141](https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki)
+
+Also the many participants asking valuable questions in the SoB Discord.
+
+## Thanks for organizing this fun exercise!

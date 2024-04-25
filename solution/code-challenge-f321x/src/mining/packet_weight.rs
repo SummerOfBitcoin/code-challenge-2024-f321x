@@ -27,7 +27,7 @@ fn calc_parents(transactions: &HashMap<String, Transaction>, child_txid: &String
             return fee_and_weight;
         };
     } else {
-        panic!("calc_parent_fees tx not found?");
+        panic!("calc_parent_fees: tx not found?");
     };
 
     fee_and_weight
