@@ -73,7 +73,7 @@ pub fn sort_transactions(txid_tx_map: &HashMap<String, Transaction>) -> Vec<Tran
 // block size limit of 4 000 000 weight units
 pub fn cut_size(sorted_transactions: Vec<Transaction>) -> Vec<Transaction> {
     let mut block: Vec<Transaction> = Vec::new();
-    let mut free_block_space: i64 = 3992000;
+    let mut free_block_space: i64 = 3970000;
     for tx in sorted_transactions {
         if free_block_space > tx.meta.weight as i64 {
             free_block_space -= tx.meta.weight as i64;

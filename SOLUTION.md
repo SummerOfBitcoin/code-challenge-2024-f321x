@@ -547,6 +547,9 @@ To make the program more performant it could be optimized to make more use of re
 #### Implement more input types and bitcoin functionality
 To be able to process more different transaction types for higher fee revenue and better block space utilization it would be neccessary to implement more input types like P2TR, P2WSH and P2SH. To do this it would be neccessary to implement some more opcodes like OP_IF in the script engine. It would also be possible to implement more sighash types besides SIGHASH_ALL to be able to verify these transactions too.
 
+#### Add sigops counting
+No transaction input seemed to contain excessive amounts of signature operations but to make the program more reliable in respecting the block creation rules a function to count the sigops in the candidate block to limit them below 80000 operations should be implemented.
+
 #### Make the program output deterministic
 Currently there is a small variance in block creation even tough the input data provided is constant. To make this deterministic would make the program more predictable and allow for more accurate benchmarks. To do this it would be neccessary to change some data types from hash based ordering to Vectors and logic handling the transactions.
 
